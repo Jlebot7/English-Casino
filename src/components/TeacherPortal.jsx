@@ -13,9 +13,7 @@ import {
   Copy, 
   BookOpen, 
   Settings as SettingsIcon,
-  Bot,
-  School,
-  Users
+  Bot
 } from 'lucide-react';
 import { generateEnglishQuiz, GROQ_MODELS } from '../services/groqService';
 import { saveActivity, deleteActivity, generateGamePin } from '../services/firebaseService';
@@ -35,13 +33,9 @@ export default function TeacherPortal({
   onActivitySaved,
   onPlayActivity,
   onOpenSettings,
-  classrooms = [],
-  activeClassroomId,
-  onSelectClassroom,
   students = [],
   onOpenRosterModal
 }) {
-  const currentClassroom = classrooms.find(c => c.id === activeClassroomId) || classrooms[0];
   const [activeTab, setActiveTab] = useState('create'); // 'create' | 'manage'
 
   // AI Generator Form State
@@ -248,11 +242,11 @@ export default function TeacherPortal({
 
           <button
             onClick={onOpenRosterModal}
-            className="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-gradient-to-r from-purple-900/80 to-indigo-950 border border-purple-500/50 text-purple-200 hover:text-white hover:scale-105 cursor-pointer"
-            title="Ingresar y gestionar salones y nombres de estudiantes"
+            className="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-gradient-to-r from-purple-900/80 to-indigo-950 border border-purple-500/50 text-purple-200 hover:text-white hover:scale-105"
+            title="Ingresar y gestionar nombres de estudiantes del salón"
           >
-            <School className="w-4 h-4 text-purple-400" />
-            <span>{currentClassroom ? `${currentClassroom.name} (${students.length})` : `Salones (${classrooms.length})`}</span>
+            <Users className="w-4 h-4 text-purple-400" />
+            <span>Alumnos ({students.length})</span>
           </button>
         </div>
       </div>
