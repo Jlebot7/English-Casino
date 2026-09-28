@@ -1,19 +1,5 @@
 import React, { useState } from 'react';
-import { 
-  Users, 
-  Plus, 
-  Trash2, 
-  X, 
-  Trophy, 
-  Dices, 
-  RotateCcw, 
-  Check, 
-  Sparkles, 
-  Coins, 
-  School, 
-  FolderPlus,
-  Edit2
-} from 'lucide-react';
+import { Users, Plus, Trash2, X, Trophy, Dices, RotateCcw, Check, Sparkles, Coins } from 'lucide-react';
 import { sounds } from '../utils/soundEffects';
 
 const AVATARS = ['🎩', '👑', '🍀', '🦊', '🤖', '💎', '🎲', '🦁', '⭐', '🚀', '🎯', '🐯'];
@@ -21,11 +7,7 @@ const AVATARS = ['🎩', '👑', '🍀', '🦊', '🤖', '💎', '🎲', '🦁',
 export default function ClassroomRosterModal({
   isOpen,
   onClose,
-  classrooms,
-  activeClassroomId,
-  onSelectClassroom,
-  onCreateClassroom,
-  onDeleteClassroom,
+  students,
   onUpdateStudents,
   activeStudentIndex,
   onSelectActiveStudent,
@@ -35,21 +17,9 @@ export default function ClassroomRosterModal({
   const [bulkText, setBulkText] = useState('');
   const [showBulkInput, setShowBulkInput] = useState(false);
 
-  // New classroom state
-  const [showNewClassroomForm, setShowNewClassroomForm] = useState(false);
-  const [newRoomName, setNewRoomName] = useState('');
-
   if (!isOpen) return null;
 
-  const currentClassroom = classrooms.find(c => c.id === activeClassroomId) || classrooms[0] || {
-    id: 'default',
-    name: 'Mi Salón',
-    students: []
-  };
-
-  const students = currentClassroom.students || [];
-
-  // Add single student to active classroom
+  // Add single student
   const handleAddSingle = (e) => {
     e.preventDefault();
     if (!singleName.trim()) return;
@@ -63,7 +33,7 @@ export default function ClassroomRosterModal({
       totalQuestions: 0
     };
 
-    onUpdateStudents(currentClassroom.id, [...students, newStudent]);
+    onUpdateStudents([...students, newStudent]);
     setSingleName('');
     sounds.playChips();
   };
@@ -88,63 +58,51 @@ export default function ClassroomRosterModal({
       totalQuestions: 0
     }));
 
-    onUpdateStudents(currentClassroom.id, [...students, ...newStudents]);
+    onUpdateStudents([...students, ...newStudents]);
     setBulkText('');
     setShowBulkInput(false);
     sounds.playJackpot();
   };
 
-  // Remove student from active classroom
+  // Remove student
   const handleRemoveStudent = (id) => {
     const updated = students.filter(s => s.id !== id);
-    onUpdateStudents(currentClassroom.id, updated);
+    onUpdateStudents(updated);
     sounds.playTick();
   };
 
-  // Reset all students' chips to 1000 in active classroom
+  // Reset all students' chips to 1000 and answers to 0
   const handleResetScores = () => {
-    if (confirm(`¿Reiniciar las fichas de los alumnos de "${currentClassroom.name}" a 1,000?`)) {
+    if (confirm('¿Reiniciar las fichas y puntajes de todos los estudiantes a 1,000?')) {
       const reset = students.map(s => ({
         ...s,
         chips: 1000,
         correctAnswers: 0,
         totalQuestions: 0
       }));
-      onUpdateStudents(currentClassroom.id, reset);
+      onUpdateStudents(reset);
       sounds.playCoin();
     }
   };
 
-  // Create new classroom
-  const handleCreateNewClassroom = (e) => {
-    e.preventDefault();
-    if (!newRoomName.trim()) return;
-
-    onCreateClassroom(newRoomName.trim());
-    setNewRoomName('');
-    setShowNewClassroomForm(false);
-    sounds.playJackpot();
-  };
-
-  // Delete current classroom
-  const handleDeleteCurrentClassroom = () => {
-    if (classrooms.length <= 1) {
-      alert('Debes mantener al menos un salón creado.');
-      return;
-    }
-    if (confirm(`¿Eliminar el salón "${currentClassroom.name}" y todos sus alumnos?`)) {
-      onDeleteClassroom(currentClassroom.id);
+  // Clear entire list
+  const handleClearAll = () => {
+    if (confirm('¿Eliminar todos los estudiantes de la lista?')) {
+      onUpdateStudents([]);
       sounds.playTick();
     }
   };
 
+  // Sorted copy for ranking
+  const sortedStudents = [...students].sort((a, b) => b.chips - a.chips);
+
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
-      <div className="bg-gradient-to-b from-gray-900 via-gray-950 to-black border-2 border-amber-500/80 rounded-3xl p-6 max-w-3xl w-full shadow-2xl relative flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
+      <div className="bg-gradient-to-b from-gray-900 via-gray-950 to-black border-2 border-amber-500/80 rounded-3xl p-6 max-w-2xl w-full shadow-2xl relative flex flex-col max-h-[92vh]">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-lg transition cursor-pointer"
+          className="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-lg transition"
         >
           <X className="w-5 h-5" />
         </button>
@@ -152,122 +110,30 @@ export default function ClassroomRosterModal({
         {/* Header */}
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400">
-            <School className="w-5 h-5" />
+            <Users className="w-5 h-5" />
           </div>
           <div>
             <h3 className="text-xl font-black text-white flex items-center gap-2">
-              Gestión de Salones y Estudiantes
+              Gestión de Estudiantes del Salón
+              <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-mono font-bold">
+                {students.length} alumnos
+              </span>
             </h3>
             <p className="text-xs text-gray-400">
-              Organiza tus alumnos por grados, cursos o grupos para jugar por turnos en el casino
+              Ingresa los nombres de tus alumnos para jugar por turnos en cualquiera de las 3 máquinas
             </p>
           </div>
-        </div>
-
-        {/* Classroom Tabs Selector & Creator */}
-        <div className="bg-black/60 p-3 rounded-2xl border border-gray-800 mb-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
-              <School className="w-3.5 h-3.5 text-amber-400" />
-              Selecciona el Salón Activo:
-            </span>
-
-            <button
-              onClick={() => setShowNewClassroomForm(!showNewClassroomForm)}
-              className="px-3 py-1 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 text-black font-bold text-xs rounded-xl flex items-center gap-1 shadow transition cursor-pointer"
-            >
-              <FolderPlus className="w-3.5 h-3.5" />
-              <span>Nuevo Salón</span>
-            </button>
-          </div>
-
-          {/* Form to create classroom */}
-          {showNewClassroomForm && (
-            <form onSubmit={handleCreateNewClassroom} className="p-3 bg-gray-900 border border-amber-500/40 rounded-xl flex gap-2 animate-fadeIn">
-              <input
-                type="text"
-                value={newRoomName}
-                onChange={(e) => setNewRoomName(e.target.value)}
-                placeholder="Nombre del nuevo salón (ej. 9° Grado B, Inglés Intensivo)..."
-                className="flex-1 bg-black/60 border border-gray-700 focus:border-amber-400 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none"
-                autoFocus
-              />
-              <button
-                type="submit"
-                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg shadow"
-              >
-                Guardar Salón
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowNewClassroomForm(false)}
-                className="px-3 py-1.5 bg-gray-800 text-gray-300 rounded-lg text-xs hover:bg-gray-700"
-              >
-                Cancelar
-              </button>
-            </form>
-          )}
-
-          {/* Classroom Pills */}
-          <div className="flex flex-wrap gap-2 pt-1">
-            {classrooms.map((cls) => {
-              const isSelected = cls.id === currentClassroom.id;
-              return (
-                <button
-                  key={cls.id}
-                  onClick={() => {
-                    sounds.playTick();
-                    onSelectClassroom(cls.id);
-                  }}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer border ${
-                    isSelected
-                      ? 'bg-amber-500 text-black border-amber-400 shadow-md shadow-amber-500/30 scale-105'
-                      : 'bg-gray-800/80 text-gray-300 border-gray-700 hover:border-amber-400/50'
-                  }`}
-                >
-                  <span>{cls.name}</span>
-                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                    isSelected ? 'bg-black text-amber-300' : 'bg-black/50 text-gray-400'
-                  }`}>
-                    {cls.students?.length || 0}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Current Active Classroom Banner & Controls */}
-        <div className="flex items-center justify-between px-1 mb-2">
-          <div className="flex items-center gap-2">
-            <h4 className="text-base font-black text-white">
-              Salón: <span className="text-amber-400">{currentClassroom.name}</span>
-            </h4>
-            <span className="text-xs text-gray-400">
-              ({students.length} estudiantes)
-            </span>
-          </div>
-
-          {classrooms.length > 1 && (
-            <button
-              onClick={handleDeleteCurrentClassroom}
-              className="text-[11px] text-red-400 hover:text-red-300 font-semibold flex items-center gap-1"
-              title="Eliminar este salón"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> Eliminar Salón
-            </button>
-          )}
         </div>
 
         {/* Input Methods: Single Add vs Bulk Paste */}
         <div className="bg-black/50 p-3.5 rounded-2xl border border-gray-800 mb-4 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-300">
-              {showBulkInput ? `Pegar lista de alumnos para ${currentClassroom.name}` : `Agregar alumno a ${currentClassroom.name}`}
+              {showBulkInput ? 'Pegar Lista de Estudiantes' : 'Agregar Estudiante'}
             </span>
             <button
               onClick={() => setShowBulkInput(!showBulkInput)}
-              className="text-xs text-amber-400 hover:underline font-semibold cursor-pointer"
+              className="text-xs text-amber-400 hover:underline font-semibold"
             >
               {showBulkInput ? '← Agregar de a uno' : '📋 Pegar lista completa (Excel / Comas)'}
             </button>
@@ -302,14 +168,14 @@ export default function ClassroomRosterModal({
                 <button
                   type="button"
                   onClick={() => setShowBulkInput(false)}
-                  className="px-3 py-1.5 bg-gray-800 text-gray-300 rounded-lg text-xs font-bold hover:bg-gray-700 cursor-pointer"
+                  className="px-3 py-1.5 bg-gray-800 text-gray-300 rounded-lg text-xs font-bold hover:bg-gray-700"
                 >
                   Cancelar
                 </button>
                 <button
                   type="button"
                   onClick={handleAddBulk}
-                  className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-bold text-xs rounded-lg shadow hover:scale-105 transition cursor-pointer"
+                  className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-bold text-xs rounded-lg shadow hover:scale-105 transition"
                 >
                   Importar Estudiantes
                 </button>
@@ -324,19 +190,26 @@ export default function ClassroomRosterModal({
             <div className="flex items-center gap-2">
               <button
                 onClick={onRandomStudent}
-                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow transition cursor-pointer"
+                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow transition"
               >
                 <Dices className="w-3.5 h-3.5" /> Elegir Al Azar 🎲
               </button>
 
               <button
                 onClick={handleResetScores}
-                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl text-xs font-bold flex items-center gap-1 transition"
                 title="Reiniciar fichas"
               >
-                <RotateCcw className="w-3.5 h-3.5" /> Reiniciar Fichas a 1000
+                <RotateCcw className="w-3.5 h-3.5" /> Reiniciar Fichas
               </button>
             </div>
+
+            <button
+              onClick={handleClearAll}
+              className="text-xs text-red-400 hover:text-red-300 font-semibold p-1"
+            >
+              Vaciar Lista
+            </button>
           </div>
         )}
 
@@ -345,9 +218,9 @@ export default function ClassroomRosterModal({
           {students.length === 0 ? (
             <div className="text-center py-10 border-2 border-dashed border-gray-800 rounded-2xl">
               <Users className="w-10 h-10 text-gray-600 mx-auto mb-2" />
-              <p className="text-gray-400 text-sm font-semibold">No hay estudiantes en {currentClassroom.name}.</p>
+              <p className="text-gray-400 text-sm font-semibold">No hay estudiantes cargados aún.</p>
               <p className="text-xs text-gray-500 mt-1">
-                Escribe un nombre arriba o pega la lista de alumnos para comenzar el modo por turnos en este salón.
+                Escribe un nombre arriba o pega la lista de alumnos para comenzar el modo por turnos.
               </p>
             </div>
           ) : (
@@ -403,7 +276,7 @@ export default function ClassroomRosterModal({
                         handleRemoveStudent(student.id);
                       }}
                       className="p-1.5 text-gray-500 hover:text-red-400 transition"
-                      title="Eliminar estudiante de este salón"
+                      title="Eliminar estudiante"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -417,11 +290,11 @@ export default function ClassroomRosterModal({
         {/* Footer */}
         <div className="mt-4 pt-3 border-t border-gray-800 flex justify-between items-center">
           <span className="text-[11px] text-gray-400">
-            Salón seleccionado: <strong className="text-amber-300">{currentClassroom.name}</strong>
+            Haz clic en cualquier alumno para asignarle el turno de juego.
           </span>
           <button
             onClick={onClose}
-            className="px-5 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-bold rounded-xl text-xs shadow transition hover:scale-105 cursor-pointer"
+            className="px-5 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-bold rounded-xl text-xs shadow transition hover:scale-105"
           >
             Listo para Jugar
           </button>
