@@ -8,7 +8,8 @@ import {
   Bot, 
   Home, 
   Coins,
-  Users
+  Users,
+  School
 } from 'lucide-react';
 import { sounds } from '../utils/soundEffects';
 
@@ -21,7 +22,9 @@ export default function Navbar({
   onOpenSettings,
   onOpenLeaderboard,
   studentsCount,
-  onOpenRosterModal
+  onOpenRosterModal,
+  activeClassroomName,
+  classroomsCount
 }) {
   return (
     <nav className="w-full bg-gray-950/80 backdrop-blur-md border-b border-amber-500/30 sticky top-0 z-40 px-4 py-3">
@@ -90,11 +93,11 @@ export default function Navbar({
               sounds.playTick();
               onOpenRosterModal();
             }}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-800/60 transition flex items-center gap-1.5"
-            title="Ingresar y gestionar nombres de estudiantes"
+            className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-800/60 transition flex items-center gap-1.5 cursor-pointer"
+            title="Ingresar y gestionar salones y nombres de estudiantes"
           >
-            <Users className="w-3.5 h-3.5 text-amber-400" />
-            <span>Alumnos ({studentsCount})</span>
+            <School className="w-3.5 h-3.5 text-amber-400" />
+            <span>{activeClassroomName ? `${activeClassroomName} (${studentsCount})` : `Salones (${classroomsCount})`}</span>
           </button>
 
           <button

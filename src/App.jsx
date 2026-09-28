@@ -22,13 +22,42 @@ const STORAGE_CHIPS_KEY = 'lucky_english_chips';
 const STORAGE_NICK_KEY = 'lucky_english_nick';
 const STORAGE_AVATAR_KEY = 'lucky_english_avatar';
 const STORAGE_GROQ_KEY = 'lucky_english_groq_key';
-const STORAGE_STUDENTS_KEY = 'lucky_english_students';
+const STORAGE_CLASSROOMS_KEY = 'lucky_english_classrooms';
+const STORAGE_ACTIVE_CLASSROOM_KEY = 'lucky_english_active_classroom';
 
-const INITIAL_DEFAULT_STUDENTS = [
-  { id: 'std_1', name: 'Carlos Gómez', avatar: '🎩', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
-  { id: 'std_2', name: 'Sofía Martínez', avatar: '👑', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
-  { id: 'std_3', name: 'Mateo Silva', avatar: '🍀', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
-  { id: 'std_4', name: 'Valentina Ríos', avatar: '💎', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+const INITIAL_DEFAULT_CLASSROOMS = [
+  {
+    id: 'room_1',
+    name: '7° Básico A',
+    description: 'Nivel Inicial / A2',
+    students: [
+      { id: 'std_1', name: 'Carlos Gómez', avatar: '🎩', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+      { id: 'std_2', name: 'Sofía Martínez', avatar: '👑', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+      { id: 'std_3', name: 'Mateo Silva', avatar: '🍀', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+      { id: 'std_4', name: 'Valentina Ríos', avatar: '💎', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+    ]
+  },
+  {
+    id: 'room_2',
+    name: '8° Básico B',
+    description: 'Nivel Intermedio / B1',
+    students: [
+      { id: 'std_5', name: 'Lucas Herrera', avatar: '🦊', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+      { id: 'std_6', name: 'Camila Rojas', avatar: '⭐', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+      { id: 'std_7', name: 'Andrés Castro', avatar: '🚀', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+      { id: 'std_8', name: 'Isabella Cruz', avatar: '🐯', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+    ]
+  },
+  {
+    id: 'room_3',
+    name: 'Inglés Avanzado C1',
+    description: 'Club de Conversación & Gramática',
+    students: [
+      { id: 'std_9', name: 'Daniela Paz', avatar: '🦁', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+      { id: 'std_10', name: 'Joaquín Morales', avatar: '🎲', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+      { id: 'std_11', name: 'Mariana Duarte', avatar: '👑', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+    ]
+  }
 ];
 
 export default function App() {
@@ -47,15 +76,20 @@ export default function App() {
     return localStorage.getItem(STORAGE_AVATAR_KEY) || '🎩';
   });
 
-  // Students Roster for Classroom Mode
-  const [students, setStudents] = useState(() => {
+  // Multi-Classroom state
+  const [classrooms, setClassrooms] = useState(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_STUDENTS_KEY);
-      return saved ? JSON.parse(saved) : INITIAL_DEFAULT_STUDENTS;
+      const saved = localStorage.getItem(STORAGE_CLASSROOMS_KEY);
+      return saved ? JSON.parse(saved) : INITIAL_DEFAULT_CLASSROOMS;
     } catch {
-      return INITIAL_DEFAULT_STUDENTS;
+      return INITIAL_DEFAULT_CLASSROOMS;
     }
   });
+
+  const [activeClassroomId, setActiveClassroomId] = useState(() => {
+    return localStorage.getItem(STORAGE_ACTIVE_CLASSROOM_KEY) || 'room_1';
+  });
+
   const [activeStudentIndex, setActiveStudentIndex] = useState(0);
   const [isRosterModalOpen, setIsRosterModalOpen] = useState(false);
 
@@ -88,42 +122,92 @@ export default function App() {
   }, [playerAvatar]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_STUDENTS_KEY, JSON.stringify(students));
-  }, [students]);
+    localStorage.setItem(STORAGE_CLASSROOMS_KEY, JSON.stringify(classrooms));
+  }, [classrooms]);
 
-  // Active student in classroom turn
-  const activeStudent = students.length > 0 ? (students[activeStudentIndex] || students[0]) : null;
+  useEffect(() => {
+    localStorage.setItem(STORAGE_ACTIVE_CLASSROOM_KEY, activeClassroomId);
+  }, [activeClassroomId]);
 
-  const handleNextStudent = () => {
-    if (students.length === 0) return;
-    setActiveStudentIndex(prev => (prev + 1) % students.length);
+  // Current active classroom and its students
+  const activeClassroom = classrooms.find(c => c.id === activeClassroomId) || classrooms[0] || {
+    id: 'default',
+    name: 'Mi Salón',
+    students: []
   };
 
-  const handleRandomStudent = () => {
-    if (students.length === 0) return;
-    const randIdx = Math.floor(Math.random() * students.length);
-    setActiveStudentIndex(randIdx);
+  const activeStudents = activeClassroom.students || [];
+  const activeStudent = activeStudents.length > 0 ? (activeStudents[activeStudentIndex] || activeStudents[0]) : null;
+
+  // Classroom handlers
+  const handleSelectClassroom = (roomId) => {
+    setActiveClassroomId(roomId);
+    setActiveStudentIndex(0);
   };
 
-  const handleUpdateStudents = (newList) => {
-    setStudents(newList);
-    if (activeStudentIndex >= newList.length) {
-      setActiveStudentIndex(Math.max(0, newList.length - 1));
+  const handleCreateClassroom = (name) => {
+    const newRoom = {
+      id: `room_${Date.now()}`,
+      name,
+      description: 'Salón de clases',
+      students: []
+    };
+    setClassrooms(prev => [...prev, newRoom]);
+    setActiveClassroomId(newRoom.id);
+    setActiveStudentIndex(0);
+  };
+
+  const handleDeleteClassroom = (roomId) => {
+    const updated = classrooms.filter(c => c.id !== roomId);
+    setClassrooms(updated);
+    if (updated.length > 0) {
+      setActiveClassroomId(updated[0].id);
+      setActiveStudentIndex(0);
     }
   };
 
-  // Record individual score for student who took the turn
-  const handleRecordStudentScore = (studentId, chipDelta, isCorrect, countAsQuestion) => {
-    setStudents(prev => prev.map(s => {
-      if (s.id === studentId) {
-        return {
-          ...s,
-          chips: Math.max(0, (s.chips || 1000) + chipDelta),
-          correctAnswers: (s.correctAnswers || 0) + (isCorrect ? 1 : 0),
-          totalQuestions: (s.totalQuestions || 0) + (countAsQuestion ? 1 : 0)
-        };
+  const handleUpdateClassroomStudents = (classroomId, newStudents) => {
+    setClassrooms(prev => prev.map(c => {
+      if (c.id === classroomId) {
+        return { ...c, students: newStudents };
       }
-      return s;
+      return c;
+    }));
+
+    if (classroomId === activeClassroomId && activeStudentIndex >= newStudents.length) {
+      setActiveStudentIndex(Math.max(0, newStudents.length - 1));
+    }
+  };
+
+  const handleNextStudent = () => {
+    if (activeStudents.length === 0) return;
+    setActiveStudentIndex(prev => (prev + 1) % activeStudents.length);
+  };
+
+  const handleRandomStudent = () => {
+    if (activeStudents.length === 0) return;
+    const randIdx = Math.floor(Math.random() * activeStudents.length);
+    setActiveStudentIndex(randIdx);
+  };
+
+  // Record individual score for student who took the turn in active classroom
+  const handleRecordStudentScore = (studentId, chipDelta, isCorrect, countAsQuestion) => {
+    setClassrooms(prev => prev.map(cls => {
+      if (cls.id === activeClassroomId) {
+        const updatedStudents = (cls.students || []).map(s => {
+          if (s.id === studentId) {
+            return {
+              ...s,
+              chips: Math.max(0, (s.chips || 1000) + chipDelta),
+              correctAnswers: (s.correctAnswers || 0) + (isCorrect ? 1 : 0),
+              totalQuestions: (s.totalQuestions || 0) + (countAsQuestion ? 1 : 0)
+            };
+          }
+          return s;
+        });
+        return { ...cls, students: updatedStudents };
+      }
+      return cls;
     }));
   };
 
@@ -186,7 +270,7 @@ export default function App() {
       launchActivity(found);
     } else {
       sounds.playWrong();
-      alert(`Room PIN "${pin}" was not found. Please double check the code!`);
+      alert(`El PIN "${pin}" no fue encontrado. ¡Por favor verifica el código!`);
     }
   };
 
@@ -235,7 +319,9 @@ export default function App() {
         onToggleMute={handleToggleMute}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenLeaderboard={() => setIsLeaderboardOpen(true)}
-        studentsCount={students.length}
+        studentsCount={activeStudents.length}
+        activeClassroomName={activeClassroom?.name}
+        classroomsCount={classrooms.length}
         onOpenRosterModal={() => setIsRosterModalOpen(true)}
       />
 
@@ -251,7 +337,10 @@ export default function App() {
             chips={chips}
             onJoinPin={handleJoinByPin}
             onSelectActivity={launchActivity}
-            students={students}
+            classrooms={classrooms}
+            activeClassroomId={activeClassroomId}
+            onSelectClassroom={handleSelectClassroom}
+            students={activeStudents}
             onOpenRosterModal={() => setIsRosterModalOpen(true)}
           />
         )}
@@ -265,16 +354,22 @@ export default function App() {
             }}
             onPlayActivity={launchActivity}
             onOpenSettings={() => setIsSettingsOpen(true)}
-            students={students}
+            classrooms={classrooms}
+            activeClassroomId={activeClassroomId}
+            onSelectClassroom={handleSelectClassroom}
+            students={activeStudents}
             onOpenRosterModal={() => setIsRosterModalOpen(true)}
           />
         )}
 
         {currentView === 'game' && currentActivity && (
           <div className="w-full">
-            {/* Classroom Turn Bar (Shown above games) */}
+            {/* Classroom Turn Bar with Room Selector (Shown above games) */}
             <ClassroomTurnBar
-              students={students}
+              classrooms={classrooms}
+              activeClassroomId={activeClassroomId}
+              onSelectClassroom={handleSelectClassroom}
+              students={activeStudents}
               activeStudent={activeStudent}
               onNextStudent={handleNextStudent}
               onRandomStudent={handleRandomStudent}
@@ -396,12 +491,16 @@ export default function App() {
         currentPin={currentActivity?.pin}
       />
 
-      {/* Classroom Student Roster Modal */}
+      {/* Classroom & Student Roster Modal */}
       <ClassroomRosterModal
         isOpen={isRosterModalOpen}
         onClose={() => setIsRosterModalOpen(false)}
-        students={students}
-        onUpdateStudents={handleUpdateStudents}
+        classrooms={classrooms}
+        activeClassroomId={activeClassroomId}
+        onSelectClassroom={handleSelectClassroom}
+        onCreateClassroom={handleCreateClassroom}
+        onDeleteClassroom={handleDeleteClassroom}
+        onUpdateStudents={handleUpdateClassroomStudents}
         activeStudentIndex={activeStudentIndex}
         onSelectActiveStudent={(idx) => setActiveStudentIndex(idx)}
         onRandomStudent={handleRandomStudent}
