@@ -13,16 +13,11 @@ export default function StudentLobby({
   chips,
   onJoinPin,
   onSelectActivity,
-  classrooms = [],
-  activeClassroomId,
-  onSelectClassroom,
-  students = [],
+  students,
   onOpenRosterModal
 }) {
   const [pinInput, setPinInput] = useState('');
   const [joinError, setJoinError] = useState('');
-
-  const currentClassroom = classrooms.find(c => c.id === activeClassroomId) || classrooms[0];
 
   const handleJoinByPin = (e) => {
     e.preventDefault();
@@ -53,27 +48,11 @@ export default function StudentLobby({
           ¡Aprende inglés jugando en el casino! Gira los rodillos, desafía la ruleta y dobla la apuesta en el blackjack respondiendo preguntas pedagógicas.
         </p>
 
-        {/* Classroom Mode Notice & Switcher for Teachers */}
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-          {classrooms.length > 0 && (
-            <select
-              value={activeClassroomId}
-              onChange={(e) => {
-                sounds.playTick();
-                onSelectClassroom(e.target.value);
-              }}
-              className="bg-black/80 border border-amber-500/50 text-amber-300 text-xs font-bold rounded-xl px-3 py-2 focus:outline-none cursor-pointer shadow-lg"
-              title="Selecciona el salón de clases activo"
-            >
-              {classrooms.map(c => (
-                <option key={c.id} value={c.id}>🏫 Salón: {c.name} ({c.students?.length || 0} alumnos)</option>
-              ))}
-            </select>
-          )}
-
+        {/* Classroom Mode Notice for Teachers */}
+        <div className="mt-4 flex justify-center">
           <button
             onClick={onOpenRosterModal}
-            className={`px-4 py-2 rounded-xl border text-xs font-bold transition flex items-center gap-2 shadow-lg cursor-pointer ${
+            className={`px-4 py-2 rounded-2xl border text-xs font-bold transition flex items-center gap-2 shadow-lg ${
               students.length > 0
                 ? 'bg-gradient-to-r from-purple-900/80 to-indigo-950 border-purple-500 text-purple-200 hover:scale-105'
                 : 'bg-black/60 border-amber-500/40 text-amber-300 hover:bg-amber-500/10'
@@ -81,8 +60,8 @@ export default function StudentLobby({
           >
             <Users className="w-4 h-4 text-amber-400" />
             {students.length > 0
-              ? `Gestionar Salones y Alumnos (${students.length})`
-              : '👨‍🏫 ¿Juegas en clase? Organiza por salones y alumnos aquí'}
+              ? `👥 Modo Aula Activo: ${students.length} estudiantes cargados (Editar)`
+              : '👨‍🏫 ¿Juegas en clase? Haz clic aquí para ingresar los nombres de tus alumnos'}
           </button>
         </div>
       </div>
