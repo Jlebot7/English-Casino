@@ -32,7 +32,9 @@ export default function TeacherPortal({
   activities,
   onActivitySaved,
   onPlayActivity,
-  onOpenSettings
+  onOpenSettings,
+  students = [],
+  onOpenRosterModal
 }) {
   const [activeTab, setActiveTab] = useState('create'); // 'create' | 'manage'
 
@@ -235,7 +237,16 @@ export default function TeacherPortal({
                 : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
             }`}
           >
-            <Layers className="w-4 h-4" /> My Activities ({activities.length})
+            <Layers className="w-4 h-4" /> Mis Actividades ({activities.length})
+          </button>
+
+          <button
+            onClick={onOpenRosterModal}
+            className="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-gradient-to-r from-purple-900/80 to-indigo-950 border border-purple-500/50 text-purple-200 hover:text-white hover:scale-105"
+            title="Ingresar y gestionar nombres de estudiantes del salón"
+          >
+            <Users className="w-4 h-4 text-purple-400" />
+            <span>Alumnos ({students.length})</span>
           </button>
         </div>
       </div>

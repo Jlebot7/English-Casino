@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, Trophy, Play, Users, ArrowRight, Dices, Gamepad2, Coins } from 'lucide-react';
+import { Sparkles, Trophy, Play, Users, ArrowRight, Dices, Gamepad2, Coins, UserCheck } from 'lucide-react';
 import { sounds } from '../utils/soundEffects';
 
 const AVATARS = ['🎩', '👑', '🍀', '🦊', '🤖', '💎', '🎲', '🦁'];
@@ -12,7 +12,9 @@ export default function StudentLobby({
   setPlayerAvatar,
   chips,
   onJoinPin,
-  onSelectActivity
+  onSelectActivity,
+  students,
+  onOpenRosterModal
 }) {
   const [pinInput, setPinInput] = useState('');
   const [joinError, setJoinError] = useState('');
@@ -20,7 +22,7 @@ export default function StudentLobby({
   const handleJoinByPin = (e) => {
     e.preventDefault();
     if (!pinInput.trim()) {
-      setJoinError('Please enter a 6-character Room PIN.');
+      setJoinError('Por favor ingresa un PIN de 6 dígitos.');
       sounds.playWrong();
       return;
     }
@@ -43,8 +45,25 @@ export default function StudentLobby({
         </h1>
 
         <p className="text-sm md:text-base text-gray-300 max-w-xl mx-auto leading-relaxed">
-          Level up your English skills, spin the reels, double down at the card table, and win chips with grammar and vocabulary!
+          ¡Aprende inglés jugando en el casino! Gira los rodillos, desafía la ruleta y dobla la apuesta en el blackjack respondiendo preguntas pedagógicas.
         </p>
+
+        {/* Classroom Mode Notice for Teachers */}
+        <div className="mt-4 flex justify-center">
+          <button
+            onClick={onOpenRosterModal}
+            className={`px-4 py-2 rounded-2xl border text-xs font-bold transition flex items-center gap-2 shadow-lg ${
+              students.length > 0
+                ? 'bg-gradient-to-r from-purple-900/80 to-indigo-950 border-purple-500 text-purple-200 hover:scale-105'
+                : 'bg-black/60 border-amber-500/40 text-amber-300 hover:bg-amber-500/10'
+            }`}
+          >
+            <Users className="w-4 h-4 text-amber-400" />
+            {students.length > 0
+              ? `👥 Modo Aula Activo: ${students.length} estudiantes cargados (Editar)`
+              : '👨‍🏫 ¿Juegas en clase? Haz clic aquí para ingresar los nombres de tus alumnos'}
+          </button>
+        </div>
       </div>
 
       {/* Student Profile & Quick PIN Entry */}
@@ -53,18 +72,18 @@ export default function StudentLobby({
         <div className="md:col-span-5 bg-gradient-to-b from-gray-900 to-gray-950 border border-amber-500/30 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
           <div>
             <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-              <Users className="w-4 h-4" /> Player Identity
+              <Users className="w-4 h-4" /> Perfil de Jugador
             </h3>
 
             <div className="mb-4">
               <label className="block text-xs font-bold text-gray-400 mb-1">
-                Your Nickname
+                Tu Apodo o Nombre
               </label>
               <input
                 type="text"
                 value={playerNick}
                 onChange={(e) => setPlayerNick(e.target.value)}
-                placeholder="e.g. LuckyDan, StarEnglish..."
+                placeholder="ej. CarlosG, LuckyDan..."
                 maxLength={18}
                 className="w-full bg-black/60 border border-gray-700 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-sm text-white font-semibold focus:outline-none"
               />
@@ -72,7 +91,7 @@ export default function StudentLobby({
 
             <div>
               <label className="block text-xs font-bold text-gray-400 mb-2">
-                Choose Lucky Avatar
+                Elige tu Avatar de la Suerte
               </label>
               <div className="grid grid-cols-4 gap-2">
                 {AVATARS.map((av) => (
@@ -82,7 +101,7 @@ export default function StudentLobby({
                       sounds.playTick();
                       setPlayerAvatar(av);
                     }}
-                    className={`h-12 rounded-xl text-2xl flex items-center justify-center border-2 transition transform active:scale-95 ${
+                    className={`h-12 rounded-xl text-2xl flex items-center justify-center border-2 transition transform active:scale-95 cursor-pointer ${
                       playerAvatar === av
                         ? 'bg-amber-500/20 border-amber-400 shadow-md shadow-amber-500/30 scale-105'
                         : 'bg-black/40 border-gray-800 hover:border-gray-600'
@@ -96,10 +115,10 @@ export default function StudentLobby({
           </div>
 
           <div className="mt-6 pt-4 border-t border-gray-800 flex items-center justify-between">
-            <span className="text-xs text-gray-400">Starting Balance:</span>
+            <span className="text-xs text-gray-400">Balance Inicial:</span>
             <span className="text-base font-black text-amber-400 flex items-center gap-1">
               <Coins className="w-4 h-4 text-yellow-400" />
-              {chips.toLocaleString()} Chips
+              {chips.toLocaleString()} Fichas
             </span>
           </div>
         </div>
@@ -113,10 +132,10 @@ export default function StudentLobby({
               <span className="p-2 rounded-lg bg-amber-500 text-black font-black text-sm">
                 PIN
               </span>
-              <h3 className="text-lg font-bold text-white">Join Classroom Game</h3>
+              <h3 className="text-lg font-bold text-white">Unirse a Partida de Clase</h3>
             </div>
             <p className="text-xs text-gray-300 mb-6">
-              Did your teacher provide a 6-letter room code? Enter it below to join their custom challenge!
+              ¿Tu docente te dio un código de sala? Ingrésalo a continuación para ingresar al desafío:
             </p>
 
             <form onSubmit={handleJoinByPin} className="space-y-4">
@@ -128,7 +147,7 @@ export default function StudentLobby({
                     setPinInput(e.target.value.toUpperCase());
                     setJoinError('');
                   }}
-                  placeholder="ENTER 6-DIGIT PIN (e.g. VERB77)"
+                  placeholder="INGRESA EL PIN (ej. VERB77)"
                   maxLength={8}
                   className="w-full bg-black/80 border-2 border-amber-500/60 focus:border-amber-400 rounded-xl px-4 py-3 text-lg md:text-xl text-center text-amber-300 font-black tracking-widest uppercase focus:outline-none shadow-inner"
                 />
@@ -141,13 +160,13 @@ export default function StudentLobby({
                 type="submit"
                 className="w-full py-3.5 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-gray-950 font-black text-sm uppercase tracking-wider rounded-xl shadow-lg shadow-amber-500/30 hover:scale-[1.01] active:scale-95 transition flex items-center justify-center gap-2 cursor-pointer"
               >
-                Enter Activity <ArrowRight className="w-4 h-4" />
+                Entrar a la Máquina <ArrowRight className="w-4 h-4" />
               </button>
             </form>
           </div>
 
           <div className="mt-4 pt-3 border-t border-gray-800 text-[11px] text-gray-400 text-center">
-            No registration needed. Fast and secure student access.
+            Acceso rápido sin contraseñas ni registros obligatorios.
           </div>
         </div>
       </div>
@@ -158,10 +177,10 @@ export default function StudentLobby({
           <div>
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <Dices className="w-5 h-5 text-amber-400" />
-              Casino Floor: Choose Your Machine
+              Salón de Casino: Elige tu Máquina
             </h3>
             <p className="text-xs text-gray-400">
-              Pick any preloaded or classroom challenge and test your luck & English
+              Selecciona cualquier reto del salón o creado por tu docente
             </p>
           </div>
         </div>
@@ -173,10 +192,10 @@ export default function StudentLobby({
             const isBlackjack = act.gameType === 'blackjack' || act.title.includes('Blackjack');
 
             let bannerGradient = 'from-red-950 to-gray-900 border-red-500/40';
-            let iconText = '🎰 SLOTS';
+            let iconText = '🎰 TRAGAMONEDAS';
             if (isRoulette) {
               bannerGradient = 'from-blue-950 to-gray-900 border-blue-500/40';
-              iconText = '🎡 ROULETTE';
+              iconText = '🎡 RULETA';
             } else if (isBlackjack) {
               bannerGradient = 'from-emerald-950 to-gray-900 border-emerald-500/40';
               iconText = '🃏 BLACKJACK';
@@ -193,7 +212,7 @@ export default function StudentLobby({
                       {iconText}
                     </span>
                     <span className="text-[11px] font-bold text-gray-400">
-                      PIN: <span className="text-amber-300">{act.pin}</span>
+                      PIN: <span className="text-amber-300 font-mono">{act.pin}</span>
                     </span>
                   </div>
 
@@ -208,8 +227,8 @@ export default function StudentLobby({
 
                 <div>
                   <div className="flex items-center justify-between text-[11px] text-gray-400 mb-3 pt-2 border-t border-gray-800">
-                    <span>Level: <strong className="text-amber-400">{act.level || 'B1'}</strong></span>
-                    <span>{act.questions?.length || 0} Questions</span>
+                    <span>Nivel: <strong className="text-amber-400">{act.level || 'B1'}</strong></span>
+                    <span>{act.questions?.length || 0} Preguntas</span>
                   </div>
 
                   <button
@@ -219,7 +238,7 @@ export default function StudentLobby({
                     }}
                     className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-gray-950 font-bold text-xs uppercase tracking-wider rounded-xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <Play className="w-3.5 h-3.5 fill-current" /> Play Machine
+                    <Play className="w-3.5 h-3.5 fill-current" /> Jugar Máquina
                   </button>
                 </div>
               </div>

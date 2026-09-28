@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
-import { Sparkles, Trophy, RotateCcw, Volume2, Coins, Flame, ArrowLeft } from 'lucide-react';
+import { Sparkles, Trophy, RotateCcw, Volume2, Coins, Flame, ArrowLeft, User } from 'lucide-react';
 import { sounds } from '../../utils/soundEffects';
 import QuestionCard from '../QuestionCard';
 
@@ -18,7 +18,10 @@ export default function SlotsGame({
   chips,
   onUpdateChips,
   onFinishGame,
-  onBackToLobby
+  onBackToLobby,
+  activeStudent,
+  onRecordStudentScore,
+  onAdvanceStudentTurn
 }) {
   const [bet, setBet] = useState(50);
   const [isSpinning, setIsSpinning] = useState(false);
@@ -30,7 +33,6 @@ export default function SlotsGame({
   const [correctCount, setCorrectCount] = useState(0);
   const [totalAnswered, setTotalAnswered] = useState(0);
   const [gameOver, setGameOver] = useState(false);
-  const leverRef = useRef(null);
 
   const questions = activity?.questions || [];
   const currentQuestion = questions[currentQuestionIndex];
@@ -51,12 +53,16 @@ export default function SlotsGame({
     if (isSpinning || awaitingAnswer || gameOver) return;
     if (chips < bet) {
       sounds.playWrong();
-      alert("Not enough chips to place this bet! Lower your bet or restart.");
+      alert("No hay suficientes fichas para esta apuesta. Reduce la apuesta o recarga.");
       return;
     }
 
     // Deduct bet immediately
     onUpdateChips(-bet);
+    if (onRecordStudentScore && activeStudent) {
+      onRecordStudentScore(activeStudent.id, -bet, false, false);
+    }
+
     sounds.playLever();
 
     // Trigger question to authorize spin outcome
@@ -134,6 +140,10 @@ export default function SlotsGame({
 
     if (wonChips > 0) {
       onUpdateChips(wonChips);
+      if (onRecordStudentScore && activeStudent) {
+        onRecordStudentScore(activeStudent.id, wonChips, isCorrect, true);
+      }
+
       if (finalSymbols[0] === finalSymbols[1] && finalSymbols[1] === finalSymbols[2]) {
         // JACKPOT!
         sounds.playJackpot();
@@ -142,13 +152,23 @@ export default function SlotsGame({
           spread: 80,
           origin: { y: 0.6 }
         });
-        setWinMessage(`🎰 MEGA JACKPOT! You won +${wonChips} Chips!`);
+        setWinMessage(`🎰 ¡MEGA JACKPOT! ¡${activeStudent ? activeStudent.name : 'Ganaste'} +${wonChips} Fichas!`);
       } else {
         sounds.playCoin();
-        setWinMessage(`✨ Nice Match! Won +${wonChips} Chips!`);
+        setWinMessage(`✨ ¡Acierto de Rodillos! +${wonChips} Fichas ganadas.`);
       }
     } else {
-      setWinMessage('❌ No match. Try the next round!');
+      if (onRecordStudentScore && activeStudent) {
+        onRecordStudentScore(activeStudent.id, 0, isCorrect, true);
+      }
+      setWinMessage('❌ Sin coincidencia. ¡Inténtalo en el próximo turno!');
+    }
+
+    // Advance student turn for next question
+    if (onAdvanceStudentTurn) {
+      setTimeout(() => {
+        onAdvanceStudentTurn();
+      }, 3000);
     }
 
     // Check if activity is finished
@@ -175,25 +195,32 @@ export default function SlotsGame({
   return (
     <div className="max-w-4xl mx-auto p-4 flex flex-col items-center">
       {/* Top Bar Navigation */}
-      <div className="w-full flex items-center justify-between mb-6">
+      <div className="w-full flex items-center justify-between mb-4">
         <button
           onClick={onBackToLobby}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs font-semibold border border-gray-700 transition"
         >
-          <ArrowLeft className="w-4 h-4" /> Exit to Lobby
+          <ArrowLeft className="w-4 h-4" /> Salir al Lobby
         </button>
 
         <div className="flex items-center gap-3">
+          {activeStudent && (
+            <div className="flex items-center gap-2 bg-amber-500/20 border border-amber-400 px-3 py-1 rounded-xl text-xs font-bold text-amber-300 animate-pulse">
+              <span>{activeStudent.avatar}</span>
+              <span>Turno: {activeStudent.name}</span>
+            </div>
+          )}
+
           {consecutiveWins > 1 && (
             <span className="flex items-center gap-1 px-3 py-1 bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded-full text-xs font-bold animate-pulse">
               <Flame className="w-3.5 h-3.5 text-orange-400" />
-              Streak x{consecutiveWins}!
+              Racha x{consecutiveWins}!
             </span>
           )}
 
           <div className="flex items-center gap-2 bg-gradient-to-r from-amber-600/30 to-yellow-600/30 border border-amber-500/40 px-4 py-1.5 rounded-xl shadow-lg">
             <Coins className="w-4 h-4 text-amber-400" />
-            <span className="text-sm font-black text-amber-300">{chips.toLocaleString()} Chips</span>
+            <span className="text-sm font-black text-amber-300">{chips.toLocaleString()} Fichas</span>
           </div>
         </div>
       </div>
@@ -208,7 +235,7 @@ export default function SlotsGame({
             </h2>
           </div>
           <p className="text-xs text-amber-200/70 mt-1 uppercase tracking-widest font-semibold">
-            English Grammar & Vocabulary Reels
+            {activeStudent ? `Turno de: ${activeStudent.name} ${activeStudent.avatar}` : 'Grammar & Vocabulary Reels'}
           </p>
         </div>
 
@@ -243,7 +270,7 @@ export default function SlotsGame({
         <div className="flex flex-wrap items-center justify-between gap-4 bg-black/40 p-4 rounded-2xl border border-gray-800">
           <div>
             <label className="block text-[11px] text-gray-400 uppercase font-bold mb-1">
-              Select Bet (Chips)
+              Apuesta en Fichas
             </label>
             <div className="flex items-center gap-1.5">
               {[25, 50, 100, 250].map((amount) => (
@@ -276,7 +303,7 @@ export default function SlotsGame({
             }`}
           >
             <Sparkles className="w-5 h-5 text-gray-950" />
-            {isSpinning ? 'Spinning...' : awaitingAnswer ? 'Answer Below!' : 'PULL & SPIN'}
+            {isSpinning ? 'Girando...' : awaitingAnswer ? '¡Responde abajo!' : 'TIRAR Y GIRAR'}
           </button>
         </div>
       </div>
@@ -286,7 +313,7 @@ export default function SlotsGame({
         <div className="w-full mt-6 animate-fadeIn">
           <div className="text-center mb-2">
             <span className="text-xs uppercase font-extrabold tracking-widest text-amber-400">
-              ⚡ Answer correctly to unlock your reel jackpot!
+              ⚡ {activeStudent ? `¡${activeStudent.name}, responde correctamente para desbloquear el premio!` : '¡Responde correctamente para desbloquear el premio!'}
             </span>
           </div>
           <QuestionCard
@@ -303,17 +330,17 @@ export default function SlotsGame({
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="bg-gradient-to-b from-gray-900 to-black border-2 border-amber-500 rounded-3xl p-6 max-w-md w-full text-center shadow-2xl">
             <Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-3 animate-bounce" />
-            <h3 className="text-2xl font-black text-white mb-2">Round Finished!</h3>
+            <h3 className="text-2xl font-black text-white mb-2">¡Ronda Finalizada!</h3>
             <p className="text-gray-300 text-sm mb-4">
-              You answered <span className="font-bold text-amber-400">{correctCount}</span> out of{' '}
-              <span className="font-bold text-amber-400">{questions.length}</span> questions correctly!
+              Respuestas correctas: <span className="font-bold text-amber-400">{correctCount}</span> de{' '}
+              <span className="font-bold text-amber-400">{questions.length}</span>
             </p>
 
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 mb-6">
               <span className="text-xs text-amber-300 uppercase tracking-wider block mb-1 font-semibold">
-                Current Casino Balance
+                Balance Total de Fichas
               </span>
-              <span className="text-3xl font-black text-amber-400">{chips.toLocaleString()} Chips</span>
+              <span className="text-3xl font-black text-amber-400">{chips.toLocaleString()} Fichas</span>
             </div>
 
             <div className="flex gap-3 justify-center">
@@ -321,7 +348,7 @@ export default function SlotsGame({
                 onClick={onBackToLobby}
                 className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-bold rounded-xl text-sm shadow-lg shadow-amber-500/30 hover:scale-105 transition"
               >
-                Return to Casino Lobby
+                Volver al Lobby del Casino
               </button>
             </div>
           </div>

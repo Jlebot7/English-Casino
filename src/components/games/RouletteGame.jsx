@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
-import { ArrowLeft, Coins, Sparkles, Trophy, Disc3, Flame } from 'lucide-react';
+import { ArrowLeft, Coins, Sparkles, Trophy, Disc3, Flame, Users } from 'lucide-react';
 import { sounds } from '../../utils/soundEffects';
 import QuestionCard from '../QuestionCard';
 
@@ -20,7 +20,10 @@ export default function RouletteGame({
   chips,
   onUpdateChips,
   onFinishGame,
-  onBackToLobby
+  onBackToLobby,
+  activeStudent,
+  onRecordStudentScore,
+  onAdvanceStudentTurn
 }) {
   const canvasRef = useRef(null);
   const [bet, setBet] = useState(50);
@@ -35,7 +38,6 @@ export default function RouletteGame({
 
   // Rotation angle in radians
   const rotationRef = useRef(0);
-  const angularVelocityRef = useRef(0);
   const lastTickSliceRef = useRef(-1);
 
   const questions = activity?.questions || [];
@@ -139,11 +141,15 @@ export default function RouletteGame({
     if (isSpinning || awaitingAnswer || gameOver) return;
     if (chips < bet) {
       sounds.playWrong();
-      alert("Not enough chips! Please lower your bet.");
+      alert("No hay suficientes fichas. Por favor reduce la apuesta.");
       return;
     }
 
     onUpdateChips(-bet);
+    if (onRecordStudentScore && activeStudent) {
+      onRecordStudentScore(activeStudent.id, -bet, false, false);
+    }
+
     sounds.playLever();
     setIsSpinning(true);
     setWinMessage(null);
@@ -157,8 +163,7 @@ export default function RouletteGame({
       rotationRef.current += velocity;
       velocity *= friction;
 
-      // Check needle ticks (Pointer is at top, which is 3 * Math.PI / 2 or -Math.PI / 2)
-      // Normalize angle to find slice under pointer
+      // Pointer angle check
       const pointerAngle = (3 * Math.PI / 2 - (rotationRef.current % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
       const currentSliceIdx = Math.floor(pointerAngle / sliceAngle) % numSlices;
 
@@ -195,18 +200,32 @@ export default function RouletteGame({
       const won = Math.round(bet * mult * (consecutiveWins >= 2 ? 1.5 : 1));
       onUpdateChips(won);
 
+      if (onRecordStudentScore && activeStudent) {
+        onRecordStudentScore(activeStudent.id, won, true, true);
+      }
+
       if (mult >= 4) {
         sounds.playJackpot();
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-        setWinMessage(`🎉 ROULETTE HIT! Landed on ${selectedSlice.label} - Won +${won} Chips!`);
+        setWinMessage(`🎉 ¡PLENO EN LA RULETA! Cayó en ${selectedSlice.label} - ¡${activeStudent ? activeStudent.name : 'Ganaste'} +${won} Fichas!`);
       } else {
         sounds.playCoin();
-        setWinMessage(`✨ Correct Answer! Won +${won} Chips!`);
+        setWinMessage(`✨ ¡Respuesta Correcta! +${won} Fichas ganadas.`);
       }
     } else {
       setConsecutiveWins(0);
       sounds.playWrong();
-      setWinMessage('❌ Incorrect. The house wins this spin!');
+      if (onRecordStudentScore && activeStudent) {
+        onRecordStudentScore(activeStudent.id, 0, false, true);
+      }
+      setWinMessage('❌ Respuesta incorrecta. ¡La casa se queda con las fichas este giro!');
+    }
+
+    // Advance student turn for next question
+    if (onAdvanceStudentTurn) {
+      setTimeout(() => {
+        onAdvanceStudentTurn();
+      }, 3000);
     }
 
     if (currentQuestionIndex + 1 >= questions.length) {
@@ -232,25 +251,32 @@ export default function RouletteGame({
   return (
     <div className="max-w-4xl mx-auto p-4 flex flex-col items-center">
       {/* Top Header Navigation */}
-      <div className="w-full flex items-center justify-between mb-6">
+      <div className="w-full flex items-center justify-between mb-4">
         <button
           onClick={onBackToLobby}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs font-semibold border border-gray-700 transition"
         >
-          <ArrowLeft className="w-4 h-4" /> Exit to Lobby
+          <ArrowLeft className="w-4 h-4" /> Salir al Lobby
         </button>
 
         <div className="flex items-center gap-3">
+          {activeStudent && (
+            <div className="flex items-center gap-2 bg-amber-500/20 border border-amber-400 px-3 py-1 rounded-xl text-xs font-bold text-amber-300 animate-pulse">
+              <span>{activeStudent.avatar}</span>
+              <span>Turno: {activeStudent.name}</span>
+            </div>
+          )}
+
           {consecutiveWins > 1 && (
             <span className="flex items-center gap-1 px-3 py-1 bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded-full text-xs font-bold animate-pulse">
               <Flame className="w-3.5 h-3.5 text-orange-400" />
-              Streak x{consecutiveWins}!
+              Racha x{consecutiveWins}!
             </span>
           )}
 
           <div className="flex items-center gap-2 bg-gradient-to-r from-amber-600/30 to-yellow-600/30 border border-amber-500/40 px-4 py-1.5 rounded-xl shadow-lg">
             <Coins className="w-4 h-4 text-amber-400" />
-            <span className="text-sm font-black text-amber-300">{chips.toLocaleString()} Chips</span>
+            <span className="text-sm font-black text-amber-300">{chips.toLocaleString()} Fichas</span>
           </div>
         </div>
       </div>
@@ -263,7 +289,7 @@ export default function RouletteGame({
             🎡 ROULETTE OF FORTUNE
           </h2>
           <p className="text-xs text-amber-200/70 uppercase tracking-widest font-semibold mt-1">
-            Spin the Wheel & Answer the Category
+            {activeStudent ? `Turno de: ${activeStudent.name} ${activeStudent.avatar}` : 'Gira la Ruleta y Responde la Categoría'}
           </p>
         </div>
 
@@ -284,7 +310,7 @@ export default function RouletteGame({
         {/* Selected Sector Indicator */}
         {selectedSlice && (
           <div className="mt-3 px-4 py-1.5 rounded-full border border-amber-400 bg-amber-500/20 text-amber-300 text-xs font-bold animate-pulse">
-            🎯 Landed on: {selectedSlice.label}!
+            🎯 ¡Cayó en: {selectedSlice.label}!
           </div>
         )}
 
@@ -298,7 +324,7 @@ export default function RouletteGame({
         <div className="w-full flex flex-wrap items-center justify-between gap-4 bg-black/50 p-4 rounded-2xl border border-gray-800 mt-4">
           <div>
             <label className="block text-[11px] text-gray-400 uppercase font-bold mb-1">
-              Select Bet (Chips)
+              Apuesta en Fichas
             </label>
             <div className="flex items-center gap-1.5">
               {[50, 100, 200, 500].map((amount) => (
@@ -331,7 +357,7 @@ export default function RouletteGame({
             }`}
           >
             <Disc3 className={`w-5 h-5 text-gray-950 ${isSpinning ? 'animate-spin' : ''}`} />
-            {isSpinning ? 'Spinning Wheel...' : awaitingAnswer ? 'Answer Below!' : 'SPIN ROULETTE'}
+            {isSpinning ? 'Girando Ruleta...' : awaitingAnswer ? '¡Responde abajo!' : 'GIRAR RULETA'}
           </button>
         </div>
       </div>
@@ -341,7 +367,7 @@ export default function RouletteGame({
         <div className="w-full mt-6 animate-fadeIn">
           <div className="text-center mb-2">
             <span className="text-xs uppercase font-extrabold tracking-widest text-amber-400">
-              ⚡ Landed on {selectedSlice?.label}! Answer to claim your prize!
+              ⚡ {activeStudent ? `¡${activeStudent.name}, la ruleta cayó en ${selectedSlice?.label}! Responde para reclamar tu premio:` : `¡Cayó en ${selectedSlice?.label}! Responde para reclamar tu premio:`}
             </span>
           </div>
           <QuestionCard
@@ -358,24 +384,24 @@ export default function RouletteGame({
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="bg-gradient-to-b from-gray-900 to-black border-2 border-amber-500 rounded-3xl p-6 max-w-md w-full text-center shadow-2xl">
             <Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-3 animate-bounce" />
-            <h3 className="text-2xl font-black text-white mb-2">Roulette Session Completed!</h3>
+            <h3 className="text-2xl font-black text-white mb-2">¡Sesión de Ruleta Finalizada!</h3>
             <p className="text-gray-300 text-sm mb-4">
-              You scored <span className="font-bold text-amber-400">{correctCount}</span> /{' '}
-              <span className="font-bold text-amber-400">{questions.length}</span> correct answers!
+              Puntaje: <span className="font-bold text-amber-400">{correctCount}</span> de{' '}
+              <span className="font-bold text-amber-400">{questions.length}</span> respuestas correctas.
             </p>
 
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 mb-6">
               <span className="text-xs text-amber-300 uppercase tracking-wider block mb-1 font-semibold">
-                Final Casino Bankroll
+                Fichas Finales del Casino
               </span>
-              <span className="text-3xl font-black text-amber-400">{chips.toLocaleString()} Chips</span>
+              <span className="text-3xl font-black text-amber-400">{chips.toLocaleString()} Fichas</span>
             </div>
 
             <button
               onClick={onBackToLobby}
               className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-bold rounded-xl text-sm shadow-lg shadow-amber-500/30 hover:scale-105 transition"
             >
-              Return to Casino Lobby
+              Volver al Lobby del Casino
             </button>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import { ArrowLeft, Coins, Sparkles, Trophy, Hand, ShieldAlert, Award } from 'lucide-react';
+import { ArrowLeft, Coins, Sparkles, Trophy, Hand, ShieldAlert, Award, User } from 'lucide-react';
 import { sounds } from '../../utils/soundEffects';
 import QuestionCard from '../QuestionCard';
 
@@ -60,7 +60,10 @@ export default function BlackjackGame({
   chips,
   onUpdateChips,
   onFinishGame,
-  onBackToLobby
+  onBackToLobby,
+  activeStudent,
+  onRecordStudentScore,
+  onAdvanceStudentTurn
 }) {
   const [deck, setDeck] = useState(createShuffledDeck());
   const [bet, setBet] = useState(100);
@@ -85,11 +88,15 @@ export default function BlackjackGame({
   const startNewDeal = () => {
     if (chips < bet) {
       sounds.playWrong();
-      alert('Not enough chips to bet this amount!');
+      alert('¡No hay suficientes fichas para esta apuesta!');
       return;
     }
 
     onUpdateChips(-bet);
+    if (onRecordStudentScore && activeStudent) {
+      onRecordStudentScore(activeStudent.id, -bet, false, false);
+    }
+
     sounds.playChips();
 
     let currentDeck = deck.length < 15 ? createShuffledDeck() : [...deck];
@@ -118,13 +125,19 @@ export default function BlackjackGame({
       setGameStage('roundEnd');
       if (dScore === 21) {
         setRoundResult('push');
-        setResultMessage('Push! Both have Blackjack!');
+        setResultMessage('¡Empate! Ambos tienen Blackjack.');
         onUpdateChips(bet);
+        if (onRecordStudentScore && activeStudent) {
+          onRecordStudentScore(activeStudent.id, bet, false, false);
+        }
       } else {
         setRoundResult('blackjack');
-        setResultMessage('🔥 BLACKJACK! Natural 21 Pays 3:2!');
+        setResultMessage(`🔥 ¡BLACKJACK NATURAL! ${activeStudent ? activeStudent.name : 'Ganaste'} paga 3 a 2.`);
         const winPayout = Math.round(bet * 2.5);
         onUpdateChips(winPayout);
+        if (onRecordStudentScore && activeStudent) {
+          onRecordStudentScore(activeStudent.id, winPayout, true, false);
+        }
         sounds.playJackpot();
         confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
       }
@@ -143,11 +156,14 @@ export default function BlackjackGame({
     if (gameStage !== 'playing' || playerHand.length !== 2 || awaitingHitQuestion) return;
     if (chips < bet) {
       sounds.playWrong();
-      alert('Not enough chips to double down!');
+      alert('¡No hay suficientes fichas para doblar la apuesta!');
       return;
     }
 
     onUpdateChips(-bet);
+    if (onRecordStudentScore && activeStudent) {
+      onRecordStudentScore(activeStudent.id, -bet, false, false);
+    }
     setBet(prev => prev * 2);
     setIsDoubleDown(true);
     setAwaitingHitQuestion(true);
@@ -160,6 +176,10 @@ export default function BlackjackGame({
     if (isCorrect) {
       setCorrectCount(prev => prev + 1);
       sounds.playCard();
+
+      if (onRecordStudentScore && activeStudent) {
+        onRecordStudentScore(activeStudent.id, 0, true, true);
+      }
 
       let currentDeck = [...deck];
       if (currentDeck.length === 0) currentDeck = createShuffledDeck();
@@ -177,16 +197,18 @@ export default function BlackjackGame({
         setHideDealerHole(false);
         setGameStage('roundEnd');
         setRoundResult('lose');
-        setResultMessage(`Bust (${score})! The house wins.`);
+        setResultMessage(`¡Te pasaste con ${score}! La casa gana.`);
         advanceQuestionOrFinish();
       } else if (score === 21 || isDoubleDown) {
         // Automatically stand
         standTurn(newHand);
       }
     } else {
-      // Incorrect answer: Card not dealt, house strikes!
       sounds.playWrong();
-      setResultMessage('Incorrect answer! No card granted this turn.');
+      if (onRecordStudentScore && activeStudent) {
+        onRecordStudentScore(activeStudent.id, 0, false, true);
+      }
+      setResultMessage('¡Respuesta incorrecta! No se concede carta este turno.');
       standTurn(playerHand);
     }
   };
@@ -213,7 +235,6 @@ export default function BlackjackGame({
         setDealerHand([...curDealerHand]);
         setTimeout(dealerPlayLoop, 600);
       } else {
-        // Final evaluation
         setDeck(curDeck);
         evaluateFinalWinner(pScore, dScore);
       }
@@ -228,29 +249,47 @@ export default function BlackjackGame({
     if (dScore > 21) {
       // Dealer busts
       setRoundResult('win');
-      setResultMessage(`Dealer Busted with ${dScore}! You Win!`);
+      setResultMessage(`¡El Crupier se pasó con ${dScore}! ¡${activeStudent ? activeStudent.name : 'Ganaste'}!`);
       sounds.playJackpot();
       confetti({ particleCount: 90, spread: 60 });
       onUpdateChips(bet * 2);
+      if (onRecordStudentScore && activeStudent) {
+        onRecordStudentScore(activeStudent.id, bet * 2, true, false);
+      }
     } else if (pScore > dScore) {
       setRoundResult('win');
-      setResultMessage(`You Win! ${pScore} beats Dealer's ${dScore}!`);
+      setResultMessage(`¡${activeStudent ? activeStudent.name : 'Ganaste'}! ${pScore} vence al ${dScore} del Crupier.`);
       sounds.playCoin();
       onUpdateChips(bet * 2);
+      if (onRecordStudentScore && activeStudent) {
+        onRecordStudentScore(activeStudent.id, bet * 2, true, false);
+      }
     } else if (pScore === dScore) {
       setRoundResult('push');
-      setResultMessage(`Push! Both tied at ${pScore}. Bet refunded.`);
+      setResultMessage(`¡Empate a ${pScore}! Apuesta devuelta.`);
       onUpdateChips(bet);
+      if (onRecordStudentScore && activeStudent) {
+        onRecordStudentScore(activeStudent.id, bet, false, false);
+      }
     } else {
       setRoundResult('lose');
-      setResultMessage(`Dealer wins with ${dScore} over your ${pScore}.`);
+      setResultMessage(`El Crupier gana con ${dScore} sobre tus ${pScore}.`);
       sounds.playWrong();
+      if (onRecordStudentScore && activeStudent) {
+        onRecordStudentScore(activeStudent.id, 0, false, false);
+      }
     }
 
     advanceQuestionOrFinish();
   };
 
   const advanceQuestionOrFinish = () => {
+    if (onAdvanceStudentTurn) {
+      setTimeout(() => {
+        onAdvanceStudentTurn();
+      }, 3000);
+    }
+
     if (currentQuestionIndex + 1 >= questions.length) {
       setTimeout(() => {
         setGameOver(true);
@@ -288,12 +327,21 @@ export default function BlackjackGame({
           onClick={onBackToLobby}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs font-semibold border border-gray-700 transition"
         >
-          <ArrowLeft className="w-4 h-4" /> Exit to Lobby
+          <ArrowLeft className="w-4 h-4" /> Salir al Lobby
         </button>
 
-        <div className="flex items-center gap-2 bg-gradient-to-r from-amber-600/30 to-yellow-600/30 border border-amber-500/40 px-4 py-1.5 rounded-xl shadow-lg">
-          <Coins className="w-4 h-4 text-amber-400" />
-          <span className="text-sm font-black text-amber-300">{chips.toLocaleString()} Chips</span>
+        <div className="flex items-center gap-3">
+          {activeStudent && (
+            <div className="flex items-center gap-2 bg-amber-500/20 border border-amber-400 px-3 py-1 rounded-xl text-xs font-bold text-amber-300 animate-pulse">
+              <span>{activeStudent.avatar}</span>
+              <span>Turno: {activeStudent.name}</span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 bg-gradient-to-r from-amber-600/30 to-yellow-600/30 border border-amber-500/40 px-4 py-1.5 rounded-xl shadow-lg">
+            <Coins className="w-4 h-4 text-amber-400" />
+            <span className="text-sm font-black text-amber-300">{chips.toLocaleString()} Fichas</span>
+          </div>
         </div>
       </div>
 
@@ -305,14 +353,14 @@ export default function BlackjackGame({
             🃏 21 BLACKJACK LINGUA
           </h2>
           <p className="text-[11px] text-emerald-200/80 uppercase tracking-wider font-semibold">
-            Blackjack Pays 3 to 2 • Answer English Questions to Hit Cards
+            {activeStudent ? `Mano de: ${activeStudent.name} ${activeStudent.avatar} • Responde preguntas para pedir carta` : 'Blackjack Paga 3 a 2 • Responde preguntas para pedir carta'}
           </p>
         </div>
 
         {/* Dealer Zone */}
         <div className="flex flex-col items-center mb-6">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-bold text-emerald-200 uppercase tracking-wider">Dealer Hand</span>
+            <span className="text-xs font-bold text-emerald-200 uppercase tracking-wider">Mano del Crupier</span>
             {dealerHand.length > 0 && (
               <span className="px-2 py-0.5 rounded-md bg-black/50 text-yellow-300 text-xs font-extrabold border border-yellow-500/30">
                 {hideDealerHole ? `${dealerScore} + ?` : dealerScore}
@@ -362,7 +410,9 @@ export default function BlackjackGame({
         {/* Player Zone */}
         <div className="flex flex-col items-center mb-6">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-bold text-emerald-200 uppercase tracking-wider">Your Hand</span>
+            <span className="text-xs font-bold text-emerald-200 uppercase tracking-wider">
+              {activeStudent ? `Mano de ${activeStudent.name}` : 'Tu Mano'}
+            </span>
             {playerHand.length > 0 && (
               <span className={`px-2 py-0.5 rounded-md bg-black/50 text-xs font-extrabold border ${
                 playerScore > 21 ? 'text-red-400 border-red-500' : 'text-yellow-300 border-yellow-500/30'
@@ -398,7 +448,7 @@ export default function BlackjackGame({
             <>
               <div>
                 <label className="block text-[11px] text-emerald-300 uppercase font-bold mb-1">
-                  Select Bet
+                  Elegir Apuesta
                 </label>
                 <div className="flex items-center gap-1.5">
                   {[50, 100, 200, 500].map((amount) => (
@@ -422,9 +472,9 @@ export default function BlackjackGame({
 
               <button
                 onClick={startNewDeal}
-                className="px-8 py-3 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-gray-950 font-black text-sm uppercase rounded-xl shadow-lg shadow-amber-500/30 hover:scale-105 active:scale-95 transition"
+                className="px-8 py-3 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-gray-950 font-black text-sm uppercase rounded-xl shadow-lg shadow-amber-500/30 hover:scale-105 active:scale-95 transition cursor-pointer"
               >
-                Deal Cards
+                Repartir Cartas
               </button>
             </>
           )}
@@ -434,26 +484,26 @@ export default function BlackjackGame({
               <button
                 onClick={requestHit}
                 disabled={awaitingHitQuestion}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-sm shadow-md transition transform hover:scale-105 active:scale-95 flex items-center gap-1.5"
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-sm shadow-md transition transform hover:scale-105 active:scale-95 flex items-center gap-1.5 cursor-pointer"
               >
-                <Sparkles className="w-4 h-4" /> HIT (Answer Question)
+                <Sparkles className="w-4 h-4" /> PEDIR CARTA (Responder)
               </button>
 
               <button
                 onClick={() => standTurn()}
                 disabled={awaitingHitQuestion}
-                className="px-6 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-sm shadow-md transition transform hover:scale-105 active:scale-95 flex items-center gap-1.5"
+                className="px-6 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-sm shadow-md transition transform hover:scale-105 active:scale-95 flex items-center gap-1.5 cursor-pointer"
               >
-                <Hand className="w-4 h-4" /> STAND
+                <Hand className="w-4 h-4" /> PLANTARSE
               </button>
 
               {playerHand.length === 2 && (
                 <button
                   onClick={requestDoubleDown}
                   disabled={awaitingHitQuestion}
-                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-sm shadow-md transition transform hover:scale-105 active:scale-95"
+                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-sm shadow-md transition transform hover:scale-105 active:scale-95 cursor-pointer"
                 >
-                  DOUBLE x2
+                  DOBLAR x2
                 </button>
               )}
             </div>
@@ -466,7 +516,7 @@ export default function BlackjackGame({
         <div className="w-full mt-6 animate-fadeIn">
           <div className="text-center mb-2">
             <span className="text-xs uppercase font-extrabold tracking-widest text-amber-400">
-              ⚡ Answer correctly to receive your next card!
+              ⚡ {activeStudent ? `¡${activeStudent.name}, responde correctamente para recibir tu carta!` : '¡Responde correctamente para recibir tu carta!'}
             </span>
           </div>
           <QuestionCard
@@ -483,24 +533,24 @@ export default function BlackjackGame({
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="bg-gradient-to-b from-gray-900 to-black border-2 border-amber-500 rounded-3xl p-6 max-w-md w-full text-center shadow-2xl">
             <Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-3 animate-bounce" />
-            <h3 className="text-2xl font-black text-white mb-2">Blackjack Table Finished!</h3>
+            <h3 className="text-2xl font-black text-white mb-2">¡Mesa de Blackjack Finalizada!</h3>
             <p className="text-gray-300 text-sm mb-4">
-              Correct answers: <span className="font-bold text-amber-400">{correctCount}</span> /{' '}
+              Respuestas correctas: <span className="font-bold text-amber-400">{correctCount}</span> de{' '}
               <span className="font-bold text-amber-400">{questions.length}</span>
             </p>
 
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 mb-6">
               <span className="text-xs text-amber-300 uppercase tracking-wider block mb-1 font-semibold">
-                Final Casino Bankroll
+                Balance de Fichas
               </span>
-              <span className="text-3xl font-black text-amber-400">{chips.toLocaleString()} Chips</span>
+              <span className="text-3xl font-black text-amber-400">{chips.toLocaleString()} Fichas</span>
             </div>
 
             <button
               onClick={onBackToLobby}
               className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-bold rounded-xl text-sm shadow-lg shadow-amber-500/30 hover:scale-105 transition"
             >
-              Return to Casino Lobby
+              Volver al Lobby del Casino
             </button>
           </div>
         </div>

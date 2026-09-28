@@ -7,7 +7,8 @@ import {
   Settings, 
   Bot, 
   Home, 
-  Coins 
+  Coins,
+  Users
 } from 'lucide-react';
 import { sounds } from '../utils/soundEffects';
 
@@ -18,7 +19,9 @@ export default function Navbar({
   isMuted,
   onToggleMute,
   onOpenSettings,
-  onOpenLeaderboard
+  onOpenLeaderboard,
+  studentsCount,
+  onOpenRosterModal
 }) {
   return (
     <nav className="w-full bg-gray-950/80 backdrop-blur-md border-b border-amber-500/30 sticky top-0 z-40 px-4 py-3">
@@ -65,7 +68,7 @@ export default function Navbar({
                 : 'text-gray-300 hover:text-white hover:bg-gray-800/60'
             }`}
           >
-            <Home className="w-3.5 h-3.5" /> Casino Lobby
+            <Home className="w-3.5 h-3.5" /> Lobby
           </button>
 
           <button
@@ -79,7 +82,19 @@ export default function Navbar({
                 : 'text-gray-300 hover:text-white hover:bg-gray-800/60'
             }`}
           >
-            <Bot className="w-3.5 h-3.5 text-amber-400" /> Teacher Portal
+            <Bot className="w-3.5 h-3.5 text-amber-400" /> Panel Docente
+          </button>
+
+          <button
+            onClick={() => {
+              sounds.playTick();
+              onOpenRosterModal();
+            }}
+            className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-800/60 transition flex items-center gap-1.5"
+            title="Ingresar y gestionar nombres de estudiantes"
+          >
+            <Users className="w-3.5 h-3.5 text-amber-400" />
+            <span>Alumnos ({studentsCount})</span>
           </button>
 
           <button
@@ -89,7 +104,7 @@ export default function Navbar({
             }}
             className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-800/60 transition flex items-center gap-1.5"
           >
-            <Trophy className="w-3.5 h-3.5 text-yellow-400" /> Leaderboard
+            <Trophy className="w-3.5 h-3.5 text-yellow-400" /> Clasificación
           </button>
         </div>
 
@@ -106,12 +121,12 @@ export default function Navbar({
           {/* Sound Toggle */}
           <button
             onClick={onToggleMute}
-            className={`p-2 rounded-xl border transition ${
+            className={`p-2 rounded-xl border transition cursor-pointer ${
               isMuted
                 ? 'bg-red-950/60 border-red-500/50 text-red-400'
                 : 'bg-gray-900 border-gray-800 text-gray-300 hover:text-amber-300'
             }`}
-            title={isMuted ? 'Unmute sounds' : 'Mute sounds'}
+            title={isMuted ? 'Activar sonido' : 'Silenciar sonido'}
           >
             {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
           </button>
@@ -122,18 +137,19 @@ export default function Navbar({
               sounds.playTick();
               onOpenSettings();
             }}
-            className="p-2 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 hover:text-amber-300 transition"
-            title="Settings (Groq API, Firebase, TTS)"
+            className="p-2 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 hover:text-amber-300 transition cursor-pointer"
+            title="Ajustes (Groq API, Firebase, TTS)"
           >
             <Settings className="w-4 h-4" />
           </button>
 
-          {/* Mobile Teacher / Lobby Button */}
+          {/* Mobile Roster Button */}
           <button
-            onClick={() => setCurrentView(currentView === 'teacher' ? 'lobby' : 'teacher')}
-            className="md:hidden p-2 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold"
+            onClick={onOpenRosterModal}
+            className="md:hidden p-2 rounded-xl bg-gray-800 text-amber-400 border border-gray-700"
+            title="Alumnos"
           >
-            {currentView === 'teacher' ? 'Lobby' : 'Teacher'}
+            <Users className="w-4 h-4" />
           </button>
         </div>
       </div>

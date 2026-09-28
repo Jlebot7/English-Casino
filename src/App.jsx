@@ -4,6 +4,8 @@ import StudentLobby from './components/StudentLobby';
 import TeacherPortal from './components/TeacherPortal';
 import LeaderboardModal from './components/LeaderboardModal';
 import SettingsModal from './components/SettingsModal';
+import ClassroomRosterModal from './components/ClassroomRosterModal';
+import ClassroomTurnBar from './components/ClassroomTurnBar';
 import SlotsGame from './components/games/SlotsGame';
 import RouletteGame from './components/games/RouletteGame';
 import BlackjackGame from './components/games/BlackjackGame';
@@ -20,12 +22,20 @@ const STORAGE_CHIPS_KEY = 'lucky_english_chips';
 const STORAGE_NICK_KEY = 'lucky_english_nick';
 const STORAGE_AVATAR_KEY = 'lucky_english_avatar';
 const STORAGE_GROQ_KEY = 'lucky_english_groq_key';
+const STORAGE_STUDENTS_KEY = 'lucky_english_students';
+
+const INITIAL_DEFAULT_STUDENTS = [
+  { id: 'std_1', name: 'Carlos Gómez', avatar: '🎩', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+  { id: 'std_2', name: 'Sofía Martínez', avatar: '👑', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+  { id: 'std_3', name: 'Mateo Silva', avatar: '🍀', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+  { id: 'std_4', name: 'Valentina Ríos', avatar: '💎', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+];
 
 export default function App() {
   // App views: 'lobby' | 'teacher' | 'game'
   const [currentView, setCurrentView] = useState('lobby');
 
-  // Player state
+  // Player state (solo mode)
   const [chips, setChips] = useState(() => {
     const saved = localStorage.getItem(STORAGE_CHIPS_KEY);
     return saved ? parseInt(saved, 10) : 1000;
@@ -36,6 +46,18 @@ export default function App() {
   const [playerAvatar, setPlayerAvatar] = useState(() => {
     return localStorage.getItem(STORAGE_AVATAR_KEY) || '🎩';
   });
+
+  // Students Roster for Classroom Mode
+  const [students, setStudents] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_STUDENTS_KEY);
+      return saved ? JSON.parse(saved) : INITIAL_DEFAULT_STUDENTS;
+    } catch {
+      return INITIAL_DEFAULT_STUDENTS;
+    }
+  });
+  const [activeStudentIndex, setActiveStudentIndex] = useState(0);
+  const [isRosterModalOpen, setIsRosterModalOpen] = useState(false);
 
   // Settings & Configuration
   const [groqApiKey, setGroqApiKey] = useState(() => {
@@ -65,11 +87,50 @@ export default function App() {
     localStorage.setItem(STORAGE_AVATAR_KEY, playerAvatar);
   }, [playerAvatar]);
 
+  useEffect(() => {
+    localStorage.setItem(STORAGE_STUDENTS_KEY, JSON.stringify(students));
+  }, [students]);
+
+  // Active student in classroom turn
+  const activeStudent = students.length > 0 ? (students[activeStudentIndex] || students[0]) : null;
+
+  const handleNextStudent = () => {
+    if (students.length === 0) return;
+    setActiveStudentIndex(prev => (prev + 1) % students.length);
+  };
+
+  const handleRandomStudent = () => {
+    if (students.length === 0) return;
+    const randIdx = Math.floor(Math.random() * students.length);
+    setActiveStudentIndex(randIdx);
+  };
+
+  const handleUpdateStudents = (newList) => {
+    setStudents(newList);
+    if (activeStudentIndex >= newList.length) {
+      setActiveStudentIndex(Math.max(0, newList.length - 1));
+    }
+  };
+
+  // Record individual score for student who took the turn
+  const handleRecordStudentScore = (studentId, chipDelta, isCorrect, countAsQuestion) => {
+    setStudents(prev => prev.map(s => {
+      if (s.id === studentId) {
+        return {
+          ...s,
+          chips: Math.max(0, (s.chips || 1000) + chipDelta),
+          correctAnswers: (s.correctAnswers || 0) + (isCorrect ? 1 : 0),
+          totalQuestions: (s.totalQuestions || 0) + (countAsQuestion ? 1 : 0)
+        };
+      }
+      return s;
+    }));
+  };
+
   // Load activities from Firebase or LocalStorage and merge with default ones
   const loadAllActivities = async () => {
     try {
       const customList = await getAllActivities();
-      // Merge unique
       const merged = [...customList];
       DEFAULT_ACTIVITIES.forEach(def => {
         if (!merged.some(m => m.id === def.id || m.pin === def.pin)) {
@@ -138,7 +199,6 @@ export default function App() {
       setShowMachinePicker(false);
       setCurrentView('game');
     } else {
-      // Activity allows student to pick machine
       setShowMachinePicker(true);
       setCurrentView('game');
     }
@@ -147,14 +207,17 @@ export default function App() {
   // Game complete handler
   const handleFinishGame = async ({ gameId, correctAnswers, totalQuestions, finalChips }) => {
     try {
+      const scoringPlayer = activeStudent ? activeStudent.name : playerNick;
+      const scoringAvatar = activeStudent ? activeStudent.avatar : playerAvatar;
+
       await submitScore({
         pin: currentActivity?.pin || 'CASINO',
         gameId,
-        playerNick,
+        playerNick: scoringPlayer,
         chips: finalChips,
         correctAnswers,
         totalQuestions,
-        avatar: playerAvatar
+        avatar: scoringAvatar
       });
     } catch (err) {
       console.warn('Score submission error:', err);
@@ -172,6 +235,8 @@ export default function App() {
         onToggleMute={handleToggleMute}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenLeaderboard={() => setIsLeaderboardOpen(true)}
+        studentsCount={students.length}
+        onOpenRosterModal={() => setIsRosterModalOpen(true)}
       />
 
       {/* Main View Area */}
@@ -186,6 +251,8 @@ export default function App() {
             chips={chips}
             onJoinPin={handleJoinByPin}
             onSelectActivity={launchActivity}
+            students={students}
+            onOpenRosterModal={() => setIsRosterModalOpen(true)}
           />
         )}
 
@@ -198,18 +265,29 @@ export default function App() {
             }}
             onPlayActivity={launchActivity}
             onOpenSettings={() => setIsSettingsOpen(true)}
+            students={students}
+            onOpenRosterModal={() => setIsRosterModalOpen(true)}
           />
         )}
 
         {currentView === 'game' && currentActivity && (
           <div className="w-full">
+            {/* Classroom Turn Bar (Shown above games) */}
+            <ClassroomTurnBar
+              students={students}
+              activeStudent={activeStudent}
+              onNextStudent={handleNextStudent}
+              onRandomStudent={handleRandomStudent}
+              onOpenRosterModal={() => setIsRosterModalOpen(true)}
+            />
+
             {showMachinePicker ? (
-              <div className="max-w-xl mx-auto p-6 mt-8 bg-gradient-to-b from-gray-900 to-black border-2 border-amber-500 rounded-3xl text-center shadow-2xl animate-fadeIn">
+              <div className="max-w-xl mx-auto p-6 mt-4 bg-gradient-to-b from-gray-900 to-black border-2 border-amber-500 rounded-3xl text-center shadow-2xl animate-fadeIn">
                 <h2 className="text-2xl font-black text-amber-300 mb-2">
-                  Choose Your Casino Machine
+                  Elige la Máquina del Casino
                 </h2>
                 <p className="text-xs text-gray-300 mb-6">
-                  Playing deck: <strong className="text-white">{currentActivity.title}</strong>
+                  Actividad seleccionada: <strong className="text-white">{currentActivity.title}</strong>
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -219,11 +297,11 @@ export default function App() {
                       setActiveGameMachine('slots');
                       setShowMachinePicker(false);
                     }}
-                    className="p-4 rounded-2xl bg-red-950/60 border-2 border-red-500/60 hover:border-red-400 text-center transition hover:scale-105"
+                    className="p-4 rounded-2xl bg-red-950/60 border-2 border-red-500/60 hover:border-red-400 text-center transition hover:scale-105 cursor-pointer"
                   >
                     <div className="text-3xl mb-1">🎰</div>
                     <h4 className="text-sm font-bold text-white">Lucky Slots</h4>
-                    <p className="text-[10px] text-gray-400">Reels & Jackpots</p>
+                    <p className="text-[10px] text-gray-400">Rodillos y Jackpots</p>
                   </button>
 
                   <button
@@ -232,11 +310,11 @@ export default function App() {
                       setActiveGameMachine('roulette');
                       setShowMachinePicker(false);
                     }}
-                    className="p-4 rounded-2xl bg-blue-950/60 border-2 border-blue-500/60 hover:border-blue-400 text-center transition hover:scale-105"
+                    className="p-4 rounded-2xl bg-blue-950/60 border-2 border-blue-500/60 hover:border-blue-400 text-center transition hover:scale-105 cursor-pointer"
                   >
                     <div className="text-3xl mb-1">🎡</div>
-                    <h4 className="text-sm font-bold text-white">Roulette</h4>
-                    <p className="text-[10px] text-gray-400">Wheel of Fortune</p>
+                    <h4 className="text-sm font-bold text-white">Ruleta</h4>
+                    <p className="text-[10px] text-gray-400">Ruleta de la Fortuna</p>
                   </button>
 
                   <button
@@ -245,11 +323,11 @@ export default function App() {
                       setActiveGameMachine('blackjack');
                       setShowMachinePicker(false);
                     }}
-                    className="p-4 rounded-2xl bg-emerald-950/60 border-2 border-emerald-500/60 hover:border-emerald-400 text-center transition hover:scale-105"
+                    className="p-4 rounded-2xl bg-emerald-950/60 border-2 border-emerald-500/60 hover:border-emerald-400 text-center transition hover:scale-105 cursor-pointer"
                   >
                     <div className="text-3xl mb-1">🃏</div>
                     <h4 className="text-sm font-bold text-white">21 Blackjack</h4>
-                    <p className="text-[10px] text-gray-400">Card Strategy</p>
+                    <p className="text-[10px] text-gray-400">Cartas y Crupier</p>
                   </button>
                 </div>
               </div>
@@ -262,6 +340,9 @@ export default function App() {
                     onUpdateChips={handleUpdateChips}
                     onFinishGame={handleFinishGame}
                     onBackToLobby={() => setCurrentView('lobby')}
+                    activeStudent={activeStudent}
+                    onRecordStudentScore={handleRecordStudentScore}
+                    onAdvanceStudentTurn={handleNextStudent}
                   />
                 )}
 
@@ -272,6 +353,9 @@ export default function App() {
                     onUpdateChips={handleUpdateChips}
                     onFinishGame={handleFinishGame}
                     onBackToLobby={() => setCurrentView('lobby')}
+                    activeStudent={activeStudent}
+                    onRecordStudentScore={handleRecordStudentScore}
+                    onAdvanceStudentTurn={handleNextStudent}
                   />
                 )}
 
@@ -282,6 +366,9 @@ export default function App() {
                     onUpdateChips={handleUpdateChips}
                     onFinishGame={handleFinishGame}
                     onBackToLobby={() => setCurrentView('lobby')}
+                    activeStudent={activeStudent}
+                    onRecordStudentScore={handleRecordStudentScore}
+                    onAdvanceStudentTurn={handleNextStudent}
                   />
                 )}
               </>
@@ -307,6 +394,17 @@ export default function App() {
         isOpen={isLeaderboardOpen}
         onClose={() => setIsLeaderboardOpen(false)}
         currentPin={currentActivity?.pin}
+      />
+
+      {/* Classroom Student Roster Modal */}
+      <ClassroomRosterModal
+        isOpen={isRosterModalOpen}
+        onClose={() => setIsRosterModalOpen(false)}
+        students={students}
+        onUpdateStudents={handleUpdateStudents}
+        activeStudentIndex={activeStudentIndex}
+        onSelectActiveStudent={(idx) => setActiveStudentIndex(idx)}
+        onRandomStudent={handleRandomStudent}
       />
     </div>
   );
