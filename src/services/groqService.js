@@ -3,23 +3,68 @@
 const GROQ_CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODELS_URL = 'https://api.groq.com/openai/v1/models';
 
-export const DEFAULT_MODEL = 'llama-3.1-8b-instant';
+export const DEFAULT_MODEL = 'openai/gpt-oss-120b';
 
 export const GROQ_MODELS = [
-  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B (Ultra Fast & Universal)' },
-  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B (High Intelligence)' },
-  { id: 'llama3-70b-8192', name: 'Llama 3 70B (High Capacity)' },
-  { id: 'llama3-8b-8192', name: 'Llama 3 8B (Fast & Reliable)' },
-  { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B (High Context)' }
+  { id: 'openai/gpt-oss-120b', name: 'OpenAI GPT OSS 120B (Recomendado - Alta Inteligencia)' },
+  { id: 'openai/gpt-oss-20b', name: 'OpenAI GPT OSS 20B (Ultra Rápido)' },
+  { id: 'qwen/qwen3.8-27b', name: 'Qwen 3.8 27B (Alta Precisión)' },
+  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B' },
+  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B' }
 ];
+
+// Query active chat models directly from the user's account
+export async function getActiveGroqModels(apiKey) {
+  try {
+    const response = await fetch(GROQ_MODELS_URL, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey.trim()}`
+      }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data?.data)) {
+        // Filter out audio, whisper, safeguard, and prompt guard models
+        const chatModels = data.data
+          .map(m => m.id)
+          .filter(id => 
+            !id.includes('whisper') && 
+            !id.includes('guard') && 
+            !id.includes('orpheus') && 
+            !id.includes('safeguard')
+          );
+
+        // Put preferred models at front if present
+        const priority = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'];
+        chatModels.sort((a, b) => {
+          const aPri = priority.indexOf(a);
+          const bPri = priority.indexOf(b);
+          if (aPri !== -1 && bPri !== -1) return aPri - bPri;
+          if (aPri !== -1) return -1;
+          if (bPri !== -1) return 1;
+          return 0;
+        });
+
+        if (chatModels.length > 0) {
+          return chatModels;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Could not query dynamic Groq models list:', err);
+  }
+
+  // Fallback defaults
+  return ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'];
+}
 
 export async function testGroqConnection(apiKey) {
   if (!apiKey || apiKey.trim() === '') {
     throw new Error('Please enter a valid Groq API Key.');
   }
 
-  // Verify the API key by querying the /models endpoint
-  // This verifies key validity directly without model access restrictions
   const response = await fetch(GROQ_MODELS_URL, {
     method: 'GET',
     headers: {
@@ -51,14 +96,17 @@ export async function generateEnglishQuiz({
     throw new Error('Groq API Key is missing. Please add it in settings.');
   }
 
-  // Model fallback chain: try preferred model first, then universally available fallbacks
+  // 1. Fetch live active models from user's account to never call a decommissioned model
+  const liveModels = await getActiveGroqModels(apiKey);
+
+  // 2. Candidate chain: user choice first, then active live models, then production defaults
   const candidateModels = [
     model,
-    'llama-3.1-8b-instant',
-    'llama3-8b-8192',
-    'llama-3.3-70b-versatile',
-    'mixtral-8x7b-32768'
-  ].filter((v, i, a) => a.indexOf(v) === i); // Deduplicate
+    ...liveModels,
+    'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    'qwen/qwen3.8-27b'
+  ].filter((v, i, a) => v && a.indexOf(v) === i);
 
   const systemPrompt = `You are an elite ESL / English Language Teacher and educational game designer.
 Your task is to generate high-quality, engaging English learning quiz questions tailored for a Casino-themed educational game.
@@ -99,33 +147,58 @@ You MUST respond strictly with a valid JSON object matching this schema:
 
   for (const currentModel of candidateModels) {
     try {
-      const response = await fetch(GROQ_CHAT_URL, {
+      // First try with json_object format, fallback to standard if not supported
+      let requestBody = {
+        model: currentModel,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Generate the ${questionCount} English questions for the topic: "${topic}" at level ${level}. Output only the JSON object.` }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.7,
+        max_tokens: 3000
+      };
+
+      let response = await fetch(GROQ_CHAT_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey.trim()}`
         },
-        body: JSON.stringify({
-          model: currentModel,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Generate the ${questionCount} English questions for the topic: "${topic}" at level ${level}. Output only the JSON object.` }
-          ],
-          response_format: { type: 'json_object' },
-          temperature: 0.7,
-          max_tokens: 3000
-        })
+        body: JSON.stringify(requestBody)
       });
 
+      // If response_format json_object caused an error on this model, retry without response_format
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const msg = errorData.error?.message || `HTTP ${response.status}`;
-        // If error is model access or not found, try the next fallback model
-        if (msg.includes('model') && (msg.includes('does not exist') || msg.includes('access') || response.status === 404)) {
-          lastError = new Error(msg);
-          continue;
+
+        if (msg.toLowerCase().includes('response_format') || msg.toLowerCase().includes('json')) {
+          delete requestBody.response_format;
+          response = await fetch(GROQ_CHAT_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey.trim()}`
+            },
+            body: JSON.stringify(requestBody)
+          });
+        } else {
+          // If error is decommissioned or model access, skip to next model
+          if (msg.includes('decommissioned') || msg.includes('does not exist') || msg.includes('access') || response.status === 404 || response.status === 400) {
+            console.warn(`Model ${currentModel} unavailable (${msg}), trying next...`);
+            lastError = new Error(msg);
+            continue;
+          }
+          throw new Error(msg);
         }
-        throw new Error(msg);
+      }
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        const errMsg = errJson.error?.message || `HTTP ${response.status}`;
+        lastError = new Error(errMsg);
+        continue;
       }
 
       const data = await response.json();
@@ -135,7 +208,19 @@ You MUST respond strictly with a valid JSON object matching this schema:
         throw new Error('Groq returned an empty response.');
       }
 
-      const parsed = JSON.parse(rawContent);
+      // Robust JSON extraction (handles both raw JSON and markdown codeblock ```json ... ```)
+      let parsed;
+      try {
+        parsed = JSON.parse(rawContent);
+      } catch {
+        const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          parsed = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error('Could not parse JSON from model output.');
+        }
+      }
+
       if (!parsed.questions || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
         throw new Error('Generated response does not contain a valid questions list.');
       }
@@ -153,12 +238,12 @@ You MUST respond strictly with a valid JSON object matching this schema:
       return parsed;
     } catch (err) {
       lastError = err;
-      if (err.message && err.message.includes('model') && (err.message.includes('does not exist') || err.message.includes('access'))) {
+      if (err.message && (err.message.includes('decommissioned') || err.message.includes('model') || err.message.includes('access'))) {
         continue;
       }
       throw err;
     }
   }
 
-  throw lastError || new Error('Failed to generate quiz with available Groq models.');
+  throw lastError || new Error('No se pudo generar la actividad con los modelos activos de Groq.');
 }

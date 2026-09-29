@@ -49,7 +49,7 @@ export default function TeacherPortal({
   const [level, setLevel] = useState('B1');
   const [gameType, setGameType] = useState('all');
   const [questionCount, setQuestionCount] = useState(6);
-  const [model, setModel] = useState('llama-3.1-8b-instant');
+  const [model, setModel] = useState('openai/gpt-oss-120b');
   const [customInstructions, setCustomInstructions] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiError, setAiError] = useState(null);
