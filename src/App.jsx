@@ -71,8 +71,13 @@ export default function App() {
 
   // Player chips (pool / table)
   const [chips, setChips] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_CHIPS_KEY);
-    return saved ? parseInt(saved, 10) : 1000;
+    try {
+      const saved = localStorage.getItem(STORAGE_CHIPS_KEY);
+      const parsed = saved ? parseInt(saved, 10) : 1000;
+      return Number.isFinite(parsed) ? parsed : 1000;
+    } catch {
+      return 1000;
+    }
   });
 
   // Multiple Classrooms (Salones)

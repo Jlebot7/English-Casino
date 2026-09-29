@@ -15,7 +15,7 @@ import { sounds } from '../utils/soundEffects';
 export default function Navbar({
   currentView,
   setCurrentView,
-  chips,
+  chips = 1000,
   isMuted,
   onToggleMute,
   onOpenSettings,
@@ -114,7 +114,7 @@ export default function Navbar({
           <div className="flex items-center gap-1.5 bg-black/60 border border-amber-500/40 px-3 py-1.5 rounded-xl shadow-inner">
             <Coins className="w-4 h-4 text-amber-400" />
             <span className="text-xs font-black text-amber-300 tracking-wide">
-              {chips.toLocaleString()}
+              {(chips ?? 0).toLocaleString()}
             </span>
           </div>
 

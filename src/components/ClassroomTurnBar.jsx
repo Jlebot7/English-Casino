@@ -69,7 +69,7 @@ export default function ClassroomTurnBar({
         <div className="flex items-center gap-1.5 bg-black/60 border border-amber-500/40 px-3 py-1.5 rounded-xl shadow-inner mr-1">
           <Coins className="w-3.5 h-3.5 text-yellow-400" />
           <span className="text-xs font-black text-amber-300">
-            {activeStudent?.chips?.toLocaleString() || 1000} Fichas
+            {(activeStudent?.chips ?? 1000).toLocaleString()} Fichas
           </span>
         </div>
 
