@@ -89,39 +89,73 @@ export default function SettingsModal({
     setGroqStatus({ type: 'success', message: 'API Key saved to browser local storage.' });
   };
 
+  const parseFirebaseConfig = (input) => {
+    if (!input || !input.trim()) return null;
+    const raw = input.trim();
+
+    // 1. Try standard JSON.parse
+    try {
+      const obj = JSON.parse(raw);
+      if (obj && typeof obj === 'object' && obj.apiKey && obj.projectId) {
+        return obj;
+      }
+    } catch {}
+
+    // 2. Try cleanup of JS object syntax
+    try {
+      let cleaned = raw
+        .replace(/^(const|let|var)\s+\w+\s*=\s*/i, '')
+        .replace(/;?\s*$/, '')
+        .trim();
+
+      if (!cleaned.startsWith('{')) cleaned = '{' + cleaned;
+      if (!cleaned.endsWith('}')) cleaned = cleaned + '}';
+
+      cleaned = cleaned
+        .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?\s*:/g, '"$2":')
+        .replace(/'([^'\\]*(\\.[^'\\]*)*)'/g, '"$1"')
+        .replace(/,\s*}/g, '}');
+
+      const obj = JSON.parse(cleaned);
+      if (obj && typeof obj === 'object' && obj.apiKey && obj.projectId) {
+        return obj;
+      }
+    } catch {}
+
+    // 3. Ultra-resilient Regex extractor for Firebase fields
+    const keys = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId', 'measurementId'];
+    const extracted = {};
+    for (const k of keys) {
+      const match = raw.match(new RegExp(`["']?${k}["']?\\s*:\\s*["']([^"']+)["']`, 'i'));
+      if (match) {
+        extracted[k] = match[1];
+      }
+    }
+
+    if (extracted.apiKey && extracted.projectId) {
+      return extracted;
+    }
+
+    throw new Error('Formato no reconocido. Asegúrate de incluir apiKey y projectId entre llaves { ... }');
+  };
+
   const handleSaveFirebase = () => {
     try {
       if (!fbConfigJson.trim()) {
         saveStoredFirebaseConfig(null);
         setFbConnected(false);
-        setFbStatus({ type: 'info', message: 'Firebase configuration cleared. Using LocalStorage fallback.' });
+        setFbStatus({ type: 'info', message: 'Configuración de Firebase eliminada. Usando modo LocalStorage.' });
         return;
       }
 
-      // Try parsing JSON or Javascript object
-      let parsed;
-      try {
-        parsed = JSON.parse(fbConfigJson);
-      } catch {
-        // If teacher pasted JavaScript object syntax
-        const cleaned = fbConfigJson
-          .replace(/const\s+\w+\s*=\s*/, '')
-          .replace(/;?\s*$/, '')
-          .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":')
-          .replace(/'/g, '"');
-        parsed = JSON.parse(cleaned);
-      }
-
-      if (!parsed.apiKey || !parsed.projectId) {
-        throw new Error('Config must contain apiKey and projectId fields.');
-      }
-
+      const parsed = parseFirebaseConfig(fbConfigJson);
       saveStoredFirebaseConfig(parsed);
+      setFbConfigJson(JSON.stringify(parsed, null, 2));
       setFbConnected(true);
-      setFbStatus({ type: 'success', message: 'Firebase initialized successfully!' });
+      setFbStatus({ type: 'success', message: '¡Firebase conectado e inicializado con éxito!' });
       sounds.playJackpot();
     } catch (err) {
-      setFbStatus({ type: 'error', message: `Invalid config format: ${err.message}` });
+      setFbStatus({ type: 'error', message: `Error de formato: ${err.message}` });
       sounds.playWrong();
     }
   };
