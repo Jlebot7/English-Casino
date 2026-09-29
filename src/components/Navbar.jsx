@@ -1,5 +1,6 @@
 import React from 'react';
 import { 
+  Sparkles, 
   Trophy, 
   Volume2, 
   VolumeX, 
@@ -7,25 +8,20 @@ import {
   Bot, 
   Home, 
   Coins,
-  Users,
-  Lock,
-  LogOut
+  Users
 } from 'lucide-react';
 import { sounds } from '../utils/soundEffects';
 
 export default function Navbar({
   currentView,
   setCurrentView,
-  chips = 1000,
+  chips,
   isMuted,
   onToggleMute,
   onOpenSettings,
   onOpenLeaderboard,
   studentsCount,
-  onOpenRosterModal,
-  currentTeacher,
-  onOpenAuthModal,
-  onLogoutTeacher
+  onOpenRosterModal
 }) {
   return (
     <nav className="w-full bg-gray-950/80 backdrop-blur-md border-b border-amber-500/30 sticky top-0 z-40 px-4 py-3">
@@ -78,11 +74,7 @@ export default function Navbar({
           <button
             onClick={() => {
               sounds.playTick();
-              if (!currentTeacher && onOpenAuthModal) {
-                onOpenAuthModal('acceder al Panel Docente');
-              } else {
-                setCurrentView('teacher');
-              }
+              setCurrentView('teacher');
             }}
             className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
               currentView === 'teacher'
@@ -90,26 +82,19 @@ export default function Navbar({
                 : 'text-gray-300 hover:text-white hover:bg-gray-800/60'
             }`}
           >
-            <Bot className="w-3.5 h-3.5 text-amber-400" />
-            <span>Panel Docente</span>
-            {!currentTeacher && <Lock className="w-3 h-3 text-amber-400/70 ml-0.5" />}
+            <Bot className="w-3.5 h-3.5 text-amber-400" /> Panel Docente
           </button>
 
           <button
             onClick={() => {
               sounds.playTick();
-              if (!currentTeacher && onOpenAuthModal) {
-                onOpenAuthModal('gestionar salones y alumnos');
-              } else {
-                onOpenRosterModal();
-              }
+              onOpenRosterModal();
             }}
             className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-800/60 transition flex items-center gap-1.5"
             title="Ingresar y gestionar nombres de estudiantes"
           >
             <Users className="w-3.5 h-3.5 text-amber-400" />
             <span>Alumnos ({studentsCount})</span>
-            {!currentTeacher && <Lock className="w-3 h-3 text-amber-400/70 ml-0.5" />}
           </button>
 
           <button
@@ -123,54 +108,18 @@ export default function Navbar({
           </button>
         </div>
 
-        {/* Right Tools (Teacher Profile, Chips, Mute, Settings) */}
+        {/* Right Tools (Chips, Mute, Settings) */}
         <div className="flex items-center gap-2">
-          {/* Teacher Login / Profile Badge */}
-          {currentTeacher ? (
-            <div className="flex items-center gap-1.5 bg-purple-950/70 border border-purple-500/50 px-2.5 py-1.5 rounded-xl shadow">
-              <span className="text-sm">👨‍🏫</span>
-              <span className="text-xs font-bold text-purple-200 hidden sm:inline max-w-[120px] truncate" title={currentTeacher.email}>
-                {currentTeacher.name || currentTeacher.email.split('@')[0]}
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  sounds.playTick();
-                  if (onLogoutTeacher) onLogoutTeacher();
-                }}
-                className="ml-1 p-1 hover:bg-purple-900/60 rounded-lg text-purple-300 hover:text-red-300 transition cursor-pointer"
-                title="Cerrar sesión de docente"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                sounds.playTick();
-                if (onOpenAuthModal) onOpenAuthModal('identificarte como docente registrado');
-              }}
-              className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 text-gray-950 font-black text-xs rounded-xl shadow transition cursor-pointer flex items-center gap-1.5"
-              title="Iniciar sesión como docente registrado"
-            >
-              <Lock className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Acceso Docente</span>
-              <span className="sm:hidden">Docente</span>
-            </button>
-          )}
-
           {/* Chip Counter */}
           <div className="flex items-center gap-1.5 bg-black/60 border border-amber-500/40 px-3 py-1.5 rounded-xl shadow-inner">
             <Coins className="w-4 h-4 text-amber-400" />
             <span className="text-xs font-black text-amber-300 tracking-wide">
-              {(chips ?? 0).toLocaleString()}
+              {chips.toLocaleString()}
             </span>
           </div>
 
           {/* Sound Toggle */}
           <button
-            type="button"
             onClick={onToggleMute}
             className={`p-2 rounded-xl border transition cursor-pointer ${
               isMuted
@@ -184,22 +133,23 @@ export default function Navbar({
 
           {/* Settings Modal Button */}
           <button
-            type="button"
             onClick={() => {
               sounds.playTick();
-              if (!currentTeacher && onOpenAuthModal) {
-                onOpenAuthModal('modificar la configuración de API y base de datos');
-              } else {
-                onOpenSettings();
-              }
+              onOpenSettings();
             }}
-            className="p-2 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 hover:text-amber-300 transition cursor-pointer relative"
+            className="p-2 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 hover:text-amber-300 transition cursor-pointer"
             title="Ajustes (Groq API, Firebase, TTS)"
           >
             <Settings className="w-4 h-4" />
-            {!currentTeacher && (
-              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full" />
-            )}
+          </button>
+
+          {/* Mobile Roster Button */}
+          <button
+            onClick={onOpenRosterModal}
+            className="md:hidden p-2 rounded-xl bg-gray-800 text-amber-400 border border-gray-700"
+            title="Alumnos"
+          >
+            <Users className="w-4 h-4" />
           </button>
         </div>
       </div>
