@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
-import { Sparkles, Trophy, RotateCcw, Volume2, Coins, Flame, ArrowLeft, User, CheckCircle2, AlertCircle, Play } from 'lucide-react';
+import { Coins, Flame, ArrowLeft, CheckCircle2, AlertCircle, Play, Sparkles } from 'lucide-react';
 import { sounds } from '../../utils/soundEffects';
 import QuestionCard from '../QuestionCard';
 
@@ -17,11 +17,11 @@ export default function SlotsGame({
   activity,
   chips,
   onUpdateChips,
-  onFinishGame,
   onBackToLobby,
   activeStudent,
   onRecordStudentScore,
-  onAdvanceStudentTurn
+  onAdvanceStudentTurn,
+  onGenerateTurnQuestion
 }) {
   const [bet, setBet] = useState(50);
   const [isSpinning, setIsSpinning] = useState(false);
@@ -31,12 +31,11 @@ export default function SlotsGame({
   // Luck / Exoneration states
   const [roundOutcome, setRoundOutcome] = useState(null); // 'lucky_exonerated' | 'unlucky_challenge' | null
   const [winMessage, setWinMessage] = useState(null);
-  const [lastWonChips, setLastWonChips] = useState(0);
-  const [correctCount, setCorrectCount] = useState(0);
-  const [totalRounds, setTotalRounds] = useState(0);
+  const [turnQuestionOverride, setTurnQuestionOverride] = useState(null);
+  const [isGeneratingIA, setIsGeneratingIA] = useState(false);
 
   const questions = activity?.questions || [];
-  const currentQuestion = questions[currentQuestionIndex % (questions.length || 1)];
+  const currentQuestion = turnQuestionOverride || questions[currentQuestionIndex % (questions.length || 1)];
 
   // Helper to pick random symbol with weight
   const getRandomSymbol = () => {
@@ -60,15 +59,12 @@ export default function SlotsGame({
 
     // Deduct bet initially
     onUpdateChips(-bet);
-    if (onRecordStudentScore && activeStudent) {
-      onRecordStudentScore(activeStudent.id, -bet, false, false);
-    }
 
     sounds.playLever();
     setIsSpinning(true);
     setRoundOutcome(null);
     setWinMessage(null);
-    setLastWonChips(0);
+    setTurnQuestionOverride(null);
 
     // Reel spin animation
     let ticks = 0;
@@ -90,7 +86,6 @@ export default function SlotsGame({
 
   const finalizeSpin = () => {
     setIsSpinning(false);
-    setTotalRounds(prev => prev + 1);
 
     // Roll for luck: ~45% chance of matching symbols
     const hasLuck = Math.random() < 0.45;
@@ -113,11 +108,15 @@ export default function SlotsGame({
       }
 
       setReels(finalSymbols);
-      setLastWonChips(wonChips);
       onUpdateChips(wonChips);
 
       if (onRecordStudentScore && activeStudent) {
-        onRecordStudentScore(activeStudent.id, wonChips, true, false);
+        onRecordStudentScore(activeStudent.id, wonChips, true, false, {
+          machine: 'slots',
+          bet,
+          outcome: 'exonerated_by_luck',
+          question: null
+        });
       }
 
       setRoundOutcome('lucky_exonerated');
@@ -147,12 +146,16 @@ export default function SlotsGame({
   // Called when student answers the question after being unlucky
   const handleQuestionAnswer = (isCorrect, selected, q) => {
     if (isCorrect) {
-      setCorrectCount(prev => prev + 1);
       const reward = (q?.points || 200) + bet;
       onUpdateChips(reward);
 
       if (onRecordStudentScore && activeStudent) {
-        onRecordStudentScore(activeStudent.id, reward, true, true);
+        onRecordStudentScore(activeStudent.id, reward, true, true, {
+          machine: 'slots',
+          bet,
+          outcome: 'answered_correct',
+          question: q?.question || 'Reto de inglés'
+        });
       }
 
       sounds.playCorrect();
@@ -161,18 +164,41 @@ export default function SlotsGame({
     } else {
       sounds.playWrong();
       if (onRecordStudentScore && activeStudent) {
-        onRecordStudentScore(activeStudent.id, 0, false, true);
+        onRecordStudentScore(activeStudent.id, -bet, false, true, {
+          machine: 'slots',
+          bet,
+          outcome: 'answered_wrong',
+          question: q?.question || 'Reto de inglés'
+        });
       }
       setWinMessage('❌ Respuesta incorrecta. No te preocupes, ¡la práctica hace al maestro!');
     }
 
-    // Step to next question index
     setCurrentQuestionIndex(prev => (prev + 1) % (questions.length || 1));
+  };
+
+  // On demand question regeneration using Groq AI
+  const handleRegenerateTurnQuestion = async () => {
+    if (!onGenerateTurnQuestion) return;
+    setIsGeneratingIA(true);
+    sounds.playChips();
+    try {
+      const newQ = await onGenerateTurnQuestion(activeStudent);
+      if (newQ) {
+        setTurnQuestionOverride(newQ);
+        sounds.playTick();
+      }
+    } catch (err) {
+      alert(err.message || 'Error al generar pregunta con IA.');
+    } finally {
+      setIsGeneratingIA(false);
+    }
   };
 
   const handleNextTurn = () => {
     setRoundOutcome(null);
     setWinMessage(null);
+    setTurnQuestionOverride(null);
     if (onAdvanceStudentTurn) {
       onAdvanceStudentTurn();
     }
@@ -217,10 +243,24 @@ export default function SlotsGame({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <span className="text-xs text-amber-300 font-bold bg-black/40 px-2.5 py-1 rounded-xl border border-amber-500/20">
-              💰 {activeStudent.chips || 1000} Fichas Alumno
+              💰 {activeStudent.chips || 1000} Fichas
             </span>
+
+            {/* Quick Generate Turn Question with IA */}
+            {onGenerateTurnQuestion && (
+              <button
+                onClick={handleRegenerateTurnQuestion}
+                disabled={isGeneratingIA}
+                className="px-3 py-1.5 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow transition cursor-pointer disabled:opacity-50"
+                title="Generar un nuevo reto de inglés para este turno con IA Groq"
+              >
+                <Sparkles className={`w-3.5 h-3.5 text-yellow-300 ${isGeneratingIA ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">{isGeneratingIA ? 'Generando...' : '⚡ Reto IA'}</span>
+              </button>
+            )}
+
             {onAdvanceStudentTurn && (
               <button
                 onClick={onAdvanceStudentTurn}
@@ -337,13 +377,22 @@ export default function SlotsGame({
       {/* Unlucky English Challenge Section */}
       {roundOutcome === 'unlucky_challenge' && currentQuestion && (
         <div className="space-y-3 animate-fadeIn">
-          <div className="p-3 bg-red-950/60 border-2 border-red-500/60 rounded-2xl flex items-center justify-between text-xs">
+          <div className="p-3 bg-red-950/60 border-2 border-red-500/60 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs">
             <span className="font-bold text-red-200">
               ⚠️ Al no coincidir los rodillos, el estudiante debe responder el siguiente desafío de inglés:
             </span>
-            <span className="text-gray-400 font-mono">
-              Tema: {activity?.title || 'Inglés General'}
-            </span>
+
+            {onGenerateTurnQuestion && (
+              <button
+                type="button"
+                onClick={handleRegenerateTurnQuestion}
+                disabled={isGeneratingIA}
+                className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{isGeneratingIA ? 'Generando...' : '⚡ Generar Otro Reto IA'}</span>
+              </button>
+            )}
           </div>
 
           <QuestionCard
@@ -354,6 +403,8 @@ export default function SlotsGame({
             activeStudent={activeStudent}
             showNextButton={true}
             onNext={handleNextTurn}
+            onRegenerateQuestion={onGenerateTurnQuestion ? handleRegenerateTurnQuestion : null}
+            isRegenerating={isGeneratingIA}
           />
         </div>
       )}

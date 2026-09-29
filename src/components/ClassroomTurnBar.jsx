@@ -1,15 +1,17 @@
-import React from 'react';
-import { Users, Dices, ChevronRight, Trophy, Sparkles, Coins, Disc3 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Users, ChevronRight, Coins, Disc3, Sparkles } from 'lucide-react';
 import { sounds } from '../utils/soundEffects';
 
 export default function ClassroomTurnBar({
   students = [],
   activeStudent,
   onNextStudent,
-  onRandomStudent,
   onOpenSpinner,
-  onOpenRosterModal
+  onOpenRosterModal,
+  onGenerateTurnQuestion
 }) {
+  const [isGenerating, setIsGenerating] = useState(false);
+
   if (!students || students.length === 0) {
     return (
       <div className="w-full max-w-4xl mx-auto mb-4 px-4 py-2.5 bg-gray-900/60 border border-gray-800 rounded-2xl flex items-center justify-between text-xs backdrop-blur-sm">
@@ -26,6 +28,18 @@ export default function ClassroomTurnBar({
       </div>
     );
   }
+
+  const handleGenerate = async () => {
+    if (!onGenerateTurnQuestion) return;
+    setIsGenerating(true);
+    sounds.playChips();
+    try {
+      await onGenerateTurnQuestion(activeStudent);
+      sounds.playTick();
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   return (
     <div className="w-full max-w-4xl mx-auto mb-4 p-3 bg-gradient-to-r from-gray-950 via-amber-950/40 to-gray-950 border-2 border-amber-500/60 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-3 backdrop-blur-md">
@@ -58,6 +72,19 @@ export default function ClassroomTurnBar({
             {activeStudent?.chips?.toLocaleString() || 1000} Fichas
           </span>
         </div>
+
+        {/* Generate Question for Turn with IA */}
+        {onGenerateTurnQuestion && (
+          <button
+            onClick={handleGenerate}
+            disabled={isGenerating}
+            className="px-3 py-1.5 bg-gradient-to-r from-purple-800 to-indigo-800 hover:from-purple-700 text-purple-200 hover:text-white border border-purple-500/50 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer disabled:opacity-50"
+            title="Generar nueva pregunta con IA para este turno"
+          >
+            <Sparkles className={`w-3.5 h-3.5 text-yellow-300 ${isGenerating ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{isGenerating ? 'Generando...' : '⚡ Reto IA'}</span>
+          </button>
+        )}
 
         {/* Spinner Modal Trigger Button */}
         {onOpenSpinner && (

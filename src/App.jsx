@@ -16,36 +16,54 @@ import {
   getAllActivities, 
   submitScore 
 } from './services/firebaseService';
+import { generateSingleTurnQuestion } from './services/groqService';
 import { sounds } from './utils/soundEffects';
 
 const STORAGE_CHIPS_KEY = 'lucky_english_chips';
 const STORAGE_GROQ_KEY = 'lucky_english_groq_key';
 const STORAGE_CLASSROOMS_KEY = 'lucky_english_classrooms';
 const STORAGE_ACTIVE_CLASSROOM_ID_KEY = 'lucky_english_active_classroom_id';
+const STORAGE_ACTIVE_SESSION_KEY = 'lucky_english_active_session';
+const STORAGE_SESSIONS_HISTORY_KEY = 'lucky_english_sessions_history';
 
 const DEFAULT_INITIAL_CLASSROOMS = [
   {
     id: 'class_10a',
     name: 'Salón 10-A (Mañana)',
     students: [
-      { id: 'std_1', name: 'Carlos Gómez', avatar: '🎩', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
-      { id: 'std_2', name: 'Sofía Martínez', avatar: '👑', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
-      { id: 'std_3', name: 'Mateo Silva', avatar: '🍀', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
-      { id: 'std_4', name: 'Valentina Ríos', avatar: '💎', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
-      { id: 'std_5', name: 'Lucas Herrera', avatar: '🚀', chips: 1000, correctAnswers: 0, totalQuestions: 0 }
+      { id: 'std_1', name: 'Carlos Gómez', avatar: '🎩', chips: 1000, correctAnswers: 0, totalQuestions: 0, exoneratedCount: 0 },
+      { id: 'std_2', name: 'Sofía Martínez', avatar: '👑', chips: 1000, correctAnswers: 0, totalQuestions: 0, exoneratedCount: 0 },
+      { id: 'std_3', name: 'Mateo Silva', avatar: '🍀', chips: 1000, correctAnswers: 0, totalQuestions: 0, exoneratedCount: 0 },
+      { id: 'std_4', name: 'Valentina Ríos', avatar: '💎', chips: 1000, correctAnswers: 0, totalQuestions: 0, exoneratedCount: 0 },
+      { id: 'std_5', name: 'Lucas Herrera', avatar: '🚀', chips: 1000, correctAnswers: 0, totalQuestions: 0, exoneratedCount: 0 }
     ]
   },
   {
     id: 'class_10b',
     name: 'Salón 10-B (Tarde)',
     students: [
-      { id: 'std_6', name: 'Camila Torres', avatar: '🌸', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
-      { id: 'std_7', name: 'Nicolás Castro', avatar: '⚡', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
-      { id: 'std_8', name: 'Isabella Moreno', avatar: '⭐', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
-      { id: 'std_9', name: 'Daniel Pardo', avatar: '🦁', chips: 1000, correctAnswers: 0, totalQuestions: 0 }
+      { id: 'std_6', name: 'Camila Torres', avatar: '🌸', chips: 1000, correctAnswers: 0, totalQuestions: 0, exoneratedCount: 0 },
+      { id: 'std_7', name: 'Nicolás Castro', avatar: '⚡', chips: 1000, correctAnswers: 0, totalQuestions: 0, exoneratedCount: 0 },
+      { id: 'std_8', name: 'Isabella Moreno', avatar: '⭐', chips: 1000, correctAnswers: 0, totalQuestions: 0, exoneratedCount: 0 },
+      { id: 'std_9', name: 'Daniel Pardo', avatar: '🦁', chips: 1000, correctAnswers: 0, totalQuestions: 0, exoneratedCount: 0 }
     ]
   }
 ];
+
+function getInitialSession(classroomId, classroomName) {
+  return {
+    id: `sess_${Date.now()}`,
+    date: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }),
+    classroomId,
+    classroomName,
+    topic: 'Past Simple & Irregular Verbs',
+    level: 'B1',
+    challengeType: 'random',
+    customNotes: '',
+    status: 'active',
+    turns: []
+  };
+}
 
 export default function App() {
   // App views: 'lobby' | 'teacher' | 'game'
@@ -72,12 +90,31 @@ export default function App() {
     return saved || 'class_10a';
   });
 
-  // Active classroom & students
   const activeClassroom = classrooms.find(c => c.id === activeClassroomId) || classrooms[0] || { id: 'default', name: 'Salón', students: [] };
   const students = activeClassroom.students || [];
 
   const [activeStudentIndex, setActiveStudentIndex] = useState(0);
   const activeStudent = students.length > 0 ? (students[activeStudentIndex] || students[0]) : null;
+
+  // Active Daily Session & Persistent History
+  const [activeSession, setActiveSession] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_ACTIVE_SESSION_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn('Could not parse active session:', e);
+    }
+    return getInitialSession(activeClassroom.id, activeClassroom.name);
+  });
+
+  const [sessionsHistory, setSessionsHistory] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_SESSIONS_HISTORY_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   // Modals
   const [isRosterModalOpen, setIsRosterModalOpen] = useState(false);
@@ -110,6 +147,14 @@ export default function App() {
     localStorage.setItem(STORAGE_ACTIVE_CLASSROOM_ID_KEY, activeClassroomId);
   }, [activeClassroomId]);
 
+  useEffect(() => {
+    localStorage.setItem(STORAGE_ACTIVE_SESSION_KEY, JSON.stringify(activeSession));
+  }, [activeSession]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_SESSIONS_HISTORY_KEY, JSON.stringify(sessionsHistory));
+  }, [sessionsHistory]);
+
   // Turn Navigation
   const handleNextStudent = () => {
     if (students.length === 0) return;
@@ -126,6 +171,14 @@ export default function App() {
   const handleSelectClassroom = (id) => {
     setActiveClassroomId(id);
     setActiveStudentIndex(0);
+    const targetC = classrooms.find(c => c.id === id);
+    if (targetC && activeSession) {
+      setActiveSession(prev => ({
+        ...prev,
+        classroomId: targetC.id,
+        classroomName: targetC.name
+      }));
+    }
   };
 
   const handleCreateClassroom = (name) => {
@@ -152,7 +205,6 @@ export default function App() {
     }
   };
 
-  // Update students of the active classroom
   const handleUpdateStudents = (newStudentsList) => {
     setClassrooms(prev => prev.map(c => {
       if (c.id === activeClassroomId) {
@@ -166,19 +218,22 @@ export default function App() {
     }
   };
 
-  // Record individual score for student who took the turn
-  const handleRecordStudentScore = (studentId, chipDelta, isCorrect, countAsQuestion) => {
+  // Record individual score & log turn into activeSession.turns
+  const handleRecordStudentScore = (studentId, chipDelta, isCorrect, countAsQuestion, turnMeta = {}) => {
+    // 1. Update student in classroom
     setClassrooms(prev => prev.map(c => {
       if (c.id === activeClassroomId) {
         return {
           ...c,
           students: c.students.map(s => {
             if (s.id === studentId) {
+              const isExonerated = turnMeta.outcome === 'exonerated_by_luck';
               return {
                 ...s,
                 chips: Math.max(0, (s.chips || 1000) + chipDelta),
-                correctAnswers: (s.correctAnswers || 0) + (isCorrect ? 1 : 0),
-                totalQuestions: (s.totalQuestions || 0) + (countAsQuestion ? 1 : 0)
+                correctAnswers: (s.correctAnswers || 0) + (isCorrect && countAsQuestion ? 1 : 0),
+                totalQuestions: (s.totalQuestions || 0) + (countAsQuestion ? 1 : 0),
+                exoneratedCount: (s.exoneratedCount || 0) + (isExonerated ? 1 : 0)
               };
             }
             return s;
@@ -187,6 +242,78 @@ export default function App() {
       }
       return c;
     }));
+
+    // 2. Append live turn log to activeSession
+    const foundStudent = students.find(s => s.id === studentId);
+    const newTurnLog = {
+      id: `turn_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      studentId,
+      studentName: foundStudent?.name || 'Estudiante',
+      studentAvatar: foundStudent?.avatar || '🎩',
+      machine: turnMeta.machine || activeGameMachine,
+      bet: turnMeta.bet || 50,
+      outcome: turnMeta.outcome || (isCorrect ? 'answered_correct' : 'answered_wrong'),
+      chipsDelta: chipDelta,
+      question: turnMeta.question || null
+    };
+
+    setActiveSession(prev => ({
+      ...prev,
+      turns: [...(prev?.turns || []), newTurnLog]
+    }));
+  };
+
+  // Daily Session History Handlers
+  const handleSaveSessionToHistory = () => {
+    if (!activeSession || (activeSession.turns || []).length === 0) {
+      alert('La sesión actual no contiene turnos jugados para archivar.');
+      return;
+    }
+
+    const completedSession = {
+      ...activeSession,
+      status: 'finished',
+      finishedAt: Date.now()
+    };
+
+    setSessionsHistory(prev => [completedSession, ...prev]);
+
+    // Start a fresh session for the active classroom
+    const freshSession = getInitialSession(activeClassroom.id, activeClassroom.name);
+    freshSession.topic = activeSession.topic;
+    freshSession.level = activeSession.level;
+    freshSession.challengeType = activeSession.challengeType;
+    setActiveSession(freshSession);
+  };
+
+  const handleDeleteSessionFromHistory = (sessionId) => {
+    setSessionsHistory(prev => prev.filter(s => s.id !== sessionId));
+  };
+
+  // Real-time Single Turn Question Generator via Groq AI
+  const handleGenerateTurnQuestion = async (student = activeStudent) => {
+    if (!groqApiKey) {
+      alert('Por favor configura tu Groq API Key en Ajustes primero.');
+      setIsSettingsOpen(true);
+      return null;
+    }
+
+    const currentTopic = activeSession?.topic || currentActivity?.title || 'General English';
+    const currentLevel = activeSession?.level || currentActivity?.level || 'B1';
+    const currentType = activeSession?.challengeType || 'random';
+    const currentNotes = activeSession?.customNotes || '';
+
+    const newQ = await generateSingleTurnQuestion({
+      apiKey: groqApiKey,
+      topic: currentTopic,
+      level: currentLevel,
+      challengeType: currentType,
+      studentName: student?.name || 'Estudiante',
+      customInstructions: currentNotes
+    });
+
+    return newQ;
   };
 
   // Load activities from Firebase or LocalStorage
@@ -320,7 +447,15 @@ export default function App() {
             classrooms={classrooms}
             activeClassroomId={activeClassroomId}
             onSelectClassroom={handleSelectClassroom}
+            onCreateClassroom={handleCreateClassroom}
+            onDeleteClassroom={handleDeleteClassroom}
             students={students}
+            onUpdateStudents={handleUpdateStudents}
+            activeSession={activeSession}
+            onUpdateActiveSession={setActiveSession}
+            onSaveSessionToHistory={handleSaveSessionToHistory}
+            sessionsHistory={sessionsHistory}
+            onDeleteSessionFromHistory={handleDeleteSessionFromHistory}
             onOpenRosterModal={() => setIsRosterModalOpen(true)}
           />
         )}
@@ -335,6 +470,7 @@ export default function App() {
               onRandomStudent={handleRandomStudent}
               onOpenSpinner={() => setIsSpinnerOpen(true)}
               onOpenRosterModal={() => setIsRosterModalOpen(true)}
+              onGenerateTurnQuestion={handleGenerateTurnQuestion}
             />
 
             {activeGameMachine === 'slots' && (
@@ -347,6 +483,7 @@ export default function App() {
                 activeStudent={activeStudent}
                 onRecordStudentScore={handleRecordStudentScore}
                 onAdvanceStudentTurn={handleNextStudent}
+                onGenerateTurnQuestion={handleGenerateTurnQuestion}
               />
             )}
 
@@ -360,6 +497,7 @@ export default function App() {
                 activeStudent={activeStudent}
                 onRecordStudentScore={handleRecordStudentScore}
                 onAdvanceStudentTurn={handleNextStudent}
+                onGenerateTurnQuestion={handleGenerateTurnQuestion}
               />
             )}
 
@@ -373,6 +511,7 @@ export default function App() {
                 activeStudent={activeStudent}
                 onRecordStudentScore={handleRecordStudentScore}
                 onAdvanceStudentTurn={handleNextStudent}
+                onGenerateTurnQuestion={handleGenerateTurnQuestion}
               />
             )}
           </div>

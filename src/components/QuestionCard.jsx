@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Volume2, CheckCircle, XCircle, Sparkles, HelpCircle, Award, Eye, EyeOff, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Volume2, CheckCircle, XCircle, Sparkles, HelpCircle, Award, Eye, EyeOff, ThumbsUp, ThumbsDown, RefreshCw } from 'lucide-react';
 import { tts } from '../utils/tts';
 import { sounds } from '../utils/soundEffects';
 
@@ -11,7 +11,9 @@ export default function QuestionCard({
   isLocked = false,
   showNextButton = false,
   onNext,
-  activeStudent
+  activeStudent,
+  onRegenerateQuestion,
+  isRegenerating = false
 }) {
   const [selectedOption, setSelectedOption] = useState(null);
   const [hasAnswered, setHasAnswered] = useState(false);
@@ -78,7 +80,7 @@ export default function QuestionCard({
 
       {/* Header Info */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4 border-b border-gray-800 pb-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase tracking-wider flex items-center gap-1">
             <Sparkles className="w-3 h-3 text-amber-400" />
             {question.category || 'Reto de Inglés'}
@@ -95,7 +97,21 @@ export default function QuestionCard({
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {/* Real-time Turn Regenerate Button */}
+          {onRegenerateQuestion && !hasAnswered && (
+            <button
+              type="button"
+              onClick={onRegenerateQuestion}
+              disabled={isRegenerating || isLocked}
+              className="px-2.5 py-1.5 rounded-xl bg-purple-900/60 hover:bg-purple-800 border border-purple-500/50 text-purple-200 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+              title="Generar otra pregunta con Groq IA para este alumno"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-purple-300 ${isRegenerating ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">{isRegenerating ? 'Generando...' : '⚡ Otra Pregunta IA'}</span>
+            </button>
+          )}
+
           <span className="text-xs font-bold text-amber-400 flex items-center gap-1 bg-black/40 px-2.5 py-1 rounded-full border border-amber-500/20">
             <Award className="w-3.5 h-3.5 text-yellow-400" />
             +{question.points || 200} Fichas
@@ -184,7 +200,7 @@ export default function QuestionCard({
         </div>
       )}
 
-      {/* Classroom Teacher Oral Grading Bar (For sentence creation or oral verification) */}
+      {/* Classroom Teacher Oral Grading Bar */}
       {(!hasAnswered || isOralType) && (
         <div className="mt-5 p-4 rounded-2xl bg-black/40 border border-gray-800 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -217,7 +233,7 @@ export default function QuestionCard({
               <button
                 type="button"
                 onClick={() => handleSpeak(question.modelAnswer || question.correctAnswer)}
-                className="p-2 bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 rounded-lg transition"
+                className="p-2 bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 rounded-lg transition cursor-pointer"
                 title="Escuchar modelo"
               >
                 <Volume2 className="w-4 h-4" />

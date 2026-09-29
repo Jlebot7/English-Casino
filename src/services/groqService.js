@@ -7,7 +7,7 @@ export const DEFAULT_MODEL = 'openai/gpt-oss-120b';
 
 export const GROQ_MODELS = [
   { id: 'openai/gpt-oss-120b', name: 'OpenAI GPT OSS 120B (Recomendado - Alta Inteligencia)' },
-  { id: 'openai/gpt-oss-20b', name: 'OpenAI GPT OSS 20B (Ultra Rápido)' },
+  { id: 'openai/gpt-oss-20b', name: 'OpenAI GPT OSS 20B (Ultra Rápido - Ideal Turnos)' },
   { id: 'qwen/qwen3.8-27b', name: 'Qwen 3.8 27B (Alta Precisión)' },
   { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B' },
   { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B' }
@@ -45,7 +45,6 @@ export async function getActiveGroqModels(apiKey) {
             !id.includes('safeguard')
           );
 
-        // Put preferred models at front if present
         const priority = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'];
         chatModels.sort((a, b) => {
           const aPri = priority.indexOf(a);
@@ -65,7 +64,6 @@ export async function getActiveGroqModels(apiKey) {
     console.warn('Could not query dynamic Groq models list:', err);
   }
 
-  // Fallback defaults
   return ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'];
 }
 
@@ -92,6 +90,7 @@ export async function testGroqConnection(apiKey) {
   return { success: true, availableModels };
 }
 
+// Generate an entire multi-question quiz activity
 export async function generateEnglishQuiz({
   apiKey,
   topic,
@@ -106,10 +105,7 @@ export async function generateEnglishQuiz({
     throw new Error('Groq API Key is missing. Please add it in settings.');
   }
 
-  // 1. Fetch live active models from user's account to avoid decommissioned models
   const liveModels = await getActiveGroqModels(apiKey);
-
-  // 2. Candidate chain: user choice first, then active live models, then production defaults
   const candidateModels = [
     model,
     ...liveModels,
@@ -118,7 +114,6 @@ export async function generateEnglishQuiz({
     'qwen/qwen3.8-27b'
   ].filter((v, i, a) => v && a.indexOf(v) === i);
 
-  // Build type instruction guidance
   let typeGuidance = '';
   switch (challengeType) {
     case 'multiple_choice':
@@ -212,7 +207,6 @@ You MUST respond strictly with a valid JSON object matching this schema:
         body: JSON.stringify(requestBody)
       });
 
-      // If response_format json_object caused an error on this model, retry without response_format
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const msg = errorData.error?.message || `HTTP ${response.status}`;
@@ -228,7 +222,6 @@ You MUST respond strictly with a valid JSON object matching this schema:
             body: JSON.stringify(requestBody)
           });
         } else {
-          // If decommissioned or model not found, try next candidate model
           if (msg.includes('decommissioned') || msg.includes('does not exist') || msg.includes('access') || response.status === 404 || response.status === 400) {
             console.warn(`Model ${currentModel} unavailable (${msg}), trying next...`);
             lastError = new Error(msg);
@@ -252,7 +245,6 @@ You MUST respond strictly with a valid JSON object matching this schema:
         throw new Error('Groq returned an empty response.');
       }
 
-      // Robust JSON extraction
       let parsed;
       try {
         parsed = JSON.parse(rawContent);
@@ -270,7 +262,7 @@ You MUST respond strictly with a valid JSON object matching this schema:
       }
 
       parsed.questions = parsed.questions.map((q, idx) => {
-        const qType = q.type || challengeType === 'random' ? (q.type || 'multiple_choice') : challengeType;
+        const qType = q.type || (challengeType === 'random' ? (q.type || 'multiple_choice') : challengeType);
         const opts = Array.isArray(q.options) && q.options.length >= 2 ? q.options : [];
         const ans = q.correctAnswer || q.modelAnswer || (opts.length > 0 ? opts[0] : 'Correct answer');
         const modelAns = q.modelAnswer || ans;
@@ -307,4 +299,129 @@ You MUST respond strictly with a valid JSON object matching this schema:
   }
 
   throw lastError || new Error('No se pudo generar la actividad con los modelos activos de Groq.');
+}
+
+// Generate EXACTLY ONE challenge for a single classroom student turn in real-time
+export async function generateSingleTurnQuestion({
+  apiKey,
+  topic = 'General English',
+  level = 'B1',
+  challengeType = 'random',
+  studentName = 'Estudiante',
+  model = DEFAULT_MODEL,
+  customInstructions = ''
+}) {
+  if (!apiKey || apiKey.trim() === '') {
+    throw new Error('Groq API Key is missing. Please add it in settings.');
+  }
+
+  const liveModels = await getActiveGroqModels(apiKey);
+  // Prefer 20B or 120B for ultra-fast single turn generation
+  const candidateModels = [
+    model,
+    'openai/gpt-oss-20b',
+    ...liveModels,
+    'openai/gpt-oss-120b',
+    'qwen/qwen3.8-27b'
+  ].filter((v, i, a) => v && a.indexOf(v) === i);
+
+  let chosenType = challengeType;
+  if (challengeType === 'random') {
+    const types = ['multiple_choice', 'fill_blank', 'sentence_affirmative', 'sentence_negative', 'sentence_question'];
+    chosenType = types[Math.floor(Math.random() * types.length)];
+  }
+
+  let formatInstruction = '';
+  if (chosenType === 'multiple_choice') {
+    formatInstruction = 'Format: Multiple choice with 4 distinct options ("options": ["A", "B", "C", "D"]) and 1 exact correctAnswer.';
+  } else if (chosenType === 'fill_blank') {
+    formatInstruction = 'Format: Sentence with a blank "____" to complete. Provide 4 options or leave options empty if oral. Provide correctAnswer.';
+  } else if (chosenType === 'sentence_affirmative') {
+    formatInstruction = 'Format: Provide cues [subject / verb / complement] for the student to say an AFFIRMATIVE sentence aloud. "options": []. Provide "modelAnswer".';
+  } else if (chosenType === 'sentence_negative') {
+    formatInstruction = 'Format: Provide cues for the student to say a NEGATIVE sentence aloud. "options": []. Provide "modelAnswer".';
+  } else if (chosenType === 'sentence_question') {
+    formatInstruction = 'Format: Provide cues for the student to ask a QUESTION aloud. "options": []. Provide "modelAnswer".';
+  }
+
+  const prompt = `Generate ONE engaging, unique English educational challenge for student "${studentName}" playing a Las Vegas casino classroom game.
+Topic: "${topic}"
+Target Level: ${level}
+Challenge Type: ${chosenType}
+${formatInstruction}
+${customInstructions ? `Teacher Notes: ${customInstructions}` : ''}
+
+Output strictly a single JSON object:
+{
+  "id": "turn_q_${Date.now()}",
+  "type": "${chosenType}",
+  "question": "The question prompt or cues in English",
+  "promptInstructions": "Instrucción corta en español para el estudiante/docente",
+  "options": ["Opt1", "Opt2", "Opt3", "Opt4"],
+  "correctAnswer": "Exact correct answer or model sentence",
+  "modelAnswer": "Model sentence for teacher oral verification",
+  "explanation": "Clear educational tip or grammar rule in Spanish or English",
+  "category": "Grammar",
+  "points": 200
+}`;
+
+  for (const currentModel of candidateModels) {
+    try {
+      const response = await fetch(GROQ_CHAT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey.trim()}`
+        },
+        body: JSON.stringify({
+          model: currentModel,
+          messages: [
+            { role: 'system', content: 'You are an elite ESL teacher creating a quick casino turn challenge.' },
+            { role: 'user', content: prompt }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.8,
+          max_tokens: 1000
+        })
+      });
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const data = await response.json();
+      const rawContent = data.choices?.[0]?.message?.content;
+      if (!rawContent) continue;
+
+      let parsed;
+      try {
+        parsed = JSON.parse(rawContent);
+      } catch {
+        const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+      }
+
+      if (!parsed || !parsed.question) continue;
+
+      const opts = Array.isArray(parsed.options) && parsed.options.length >= 2 ? parsed.options : [];
+      const ans = parsed.correctAnswer || parsed.modelAnswer || (opts.length > 0 ? opts[0] : 'Yes');
+
+      return {
+        id: parsed.id || `turn_q_${Date.now()}`,
+        type: parsed.type || chosenType,
+        question: parsed.question,
+        promptInstructions: parsed.promptInstructions || 'Responde el reto en voz alta o selecciona la opción.',
+        options: opts,
+        correctAnswer: ans,
+        modelAnswer: parsed.modelAnswer || ans,
+        explanation: parsed.explanation || 'Regla pedagógica.',
+        category: parsed.category || 'English',
+        points: Number(parsed.points) || 200
+      };
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error('No se pudo generar la pregunta de turno con Groq. Por favor verifica tu conexión y clave API.');
 }

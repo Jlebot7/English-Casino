@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
-import { ArrowLeft, Coins, Sparkles, Trophy, Hand, Award, User, CheckCircle2, AlertCircle, Play, Plus, Shield } from 'lucide-react';
+import { ArrowLeft, Coins, CheckCircle2, AlertCircle, Play, Plus, Shield, Sparkles } from 'lucide-react';
 import { sounds } from '../../utils/soundEffects';
 import QuestionCard from '../QuestionCard';
 
@@ -58,11 +58,11 @@ export default function BlackjackGame({
   activity,
   chips,
   onUpdateChips,
-  onFinishGame,
   onBackToLobby,
   activeStudent,
   onRecordStudentScore,
-  onAdvanceStudentTurn
+  onAdvanceStudentTurn,
+  onGenerateTurnQuestion
 }) {
   const [deck, setDeck] = useState(createShuffledDeck());
   const [bet, setBet] = useState(100);
@@ -75,9 +75,11 @@ export default function BlackjackGame({
   const [roundOutcome, setRoundOutcome] = useState(null); // 'lucky_exonerated' | 'unlucky_challenge' | 'push' | null
   const [resultMessage, setResultMessage] = useState('');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [turnQuestionOverride, setTurnQuestionOverride] = useState(null);
+  const [isGeneratingIA, setIsGeneratingIA] = useState(false);
 
   const questions = activity?.questions || [];
-  const currentQuestion = questions[currentQuestionIndex % (questions.length || 1)];
+  const currentQuestion = turnQuestionOverride || questions[currentQuestionIndex % (questions.length || 1)];
 
   // Start new hand: Deal initial 2 cards to each
   const startNewDeal = () => {
@@ -88,9 +90,6 @@ export default function BlackjackGame({
     }
 
     onUpdateChips(-bet);
-    if (onRecordStudentScore && activeStudent) {
-      onRecordStudentScore(activeStudent.id, -bet, false, false);
-    }
 
     sounds.playChips();
 
@@ -111,6 +110,7 @@ export default function BlackjackGame({
     setHideDealerHole(true);
     setRoundOutcome(null);
     setResultMessage('');
+    setTurnQuestionOverride(null);
     setGameStage('playing');
 
     // Natural 21 check
@@ -134,7 +134,6 @@ export default function BlackjackGame({
 
     const score = calculateHandScore(updatedPlayerHand);
     if (score > 21) {
-      // Player busted!
       finalizeRound(updatedPlayerHand, dealerHand, currentDeck, false);
     } else if (score === 21) {
       handleStand(updatedPlayerHand, currentDeck);
@@ -179,7 +178,12 @@ export default function BlackjackGame({
       const winPayout = Math.round(bet * 2.5);
       onUpdateChips(winPayout);
       if (onRecordStudentScore && activeStudent) {
-        onRecordStudentScore(activeStudent.id, winPayout, true, false);
+        onRecordStudentScore(activeStudent.id, winPayout, true, false, {
+          machine: 'blackjack',
+          bet,
+          outcome: 'exonerated_by_luck',
+          question: null
+        });
       }
       setRoundOutcome('lucky_exonerated');
       sounds.playJackpot();
@@ -190,7 +194,12 @@ export default function BlackjackGame({
       const winPayout = Math.round(bet * 2);
       onUpdateChips(winPayout);
       if (onRecordStudentScore && activeStudent) {
-        onRecordStudentScore(activeStudent.id, winPayout, true, false);
+        onRecordStudentScore(activeStudent.id, winPayout, true, false, {
+          machine: 'blackjack',
+          bet,
+          outcome: 'exonerated_by_luck',
+          question: null
+        });
       }
       setRoundOutcome('lucky_exonerated');
       sounds.playJackpot();
@@ -199,9 +208,6 @@ export default function BlackjackGame({
     } else if (pScore === dScore) {
       // Push -> Bet returned
       onUpdateChips(bet);
-      if (onRecordStudentScore && activeStudent) {
-        onRecordStudentScore(activeStudent.id, bet, false, false);
-      }
       setRoundOutcome('push');
       sounds.playChips();
       setResultMessage(`🤝 ¡Empate (${pScore} a ${dScore})! La casa devuelve las fichas.`);
@@ -218,7 +224,12 @@ export default function BlackjackGame({
       const reward = (q?.points || 200) + bet;
       onUpdateChips(reward);
       if (onRecordStudentScore && activeStudent) {
-        onRecordStudentScore(activeStudent.id, reward, true, true);
+        onRecordStudentScore(activeStudent.id, reward, true, true, {
+          machine: 'blackjack',
+          bet,
+          outcome: 'answered_correct',
+          question: q?.question || 'Reto de blackjack'
+        });
       }
       sounds.playCorrect();
       confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
@@ -226,12 +237,34 @@ export default function BlackjackGame({
     } else {
       sounds.playWrong();
       if (onRecordStudentScore && activeStudent) {
-        onRecordStudentScore(activeStudent.id, 0, false, true);
+        onRecordStudentScore(activeStudent.id, -bet, false, true, {
+          machine: 'blackjack',
+          bet,
+          outcome: 'answered_wrong',
+          question: q?.question || 'Reto de blackjack'
+        });
       }
       setResultMessage('❌ Respuesta incorrecta. ¡Sigue practicando!');
     }
 
     setCurrentQuestionIndex(prev => (prev + 1) % (questions.length || 1));
+  };
+
+  const handleRegenerateTurnQuestion = async () => {
+    if (!onGenerateTurnQuestion) return;
+    setIsGeneratingIA(true);
+    sounds.playChips();
+    try {
+      const newQ = await onGenerateTurnQuestion(activeStudent);
+      if (newQ) {
+        setTurnQuestionOverride(newQ);
+        sounds.playTick();
+      }
+    } catch (err) {
+      alert(err.message || 'Error al generar pregunta con IA.');
+    } finally {
+      setIsGeneratingIA(false);
+    }
   };
 
   const handleNextTurn = () => {
@@ -240,6 +273,7 @@ export default function BlackjackGame({
     setResultMessage('');
     setPlayerHand([]);
     setDealerHand([]);
+    setTurnQuestionOverride(null);
     if (onAdvanceStudentTurn) {
       onAdvanceStudentTurn();
     }
@@ -289,10 +323,23 @@ export default function BlackjackGame({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <span className="text-xs text-amber-300 font-bold bg-black/40 px-2.5 py-1 rounded-xl border border-amber-500/20">
-              💰 {activeStudent.chips || 1000} Fichas Alumno
+              💰 {activeStudent.chips || 1000} Fichas
             </span>
+
+            {onGenerateTurnQuestion && (
+              <button
+                onClick={handleRegenerateTurnQuestion}
+                disabled={isGeneratingIA}
+                className="px-3 py-1.5 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow transition cursor-pointer disabled:opacity-50"
+                title="Generar un nuevo reto de inglés para este turno con IA Groq"
+              >
+                <Sparkles className={`w-3.5 h-3.5 text-yellow-300 ${isGeneratingIA ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">{isGeneratingIA ? 'Generando...' : '⚡ Reto IA'}</span>
+              </button>
+            )}
+
             {onAdvanceStudentTurn && (
               <button
                 onClick={onAdvanceStudentTurn}
@@ -466,6 +513,7 @@ export default function BlackjackGame({
                   setDealerHand([]);
                   setRoundOutcome(null);
                   setResultMessage('');
+                  setTurnQuestionOverride(null);
                 }}
                 className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-amber-300 font-bold text-xs rounded-xl border border-gray-700 transition cursor-pointer"
               >
@@ -479,13 +527,22 @@ export default function BlackjackGame({
       {/* Unlucky English Challenge Section */}
       {roundOutcome === 'unlucky_challenge' && currentQuestion && (
         <div className="space-y-3 animate-fadeIn">
-          <div className="p-3 bg-red-950/60 border-2 border-red-500/60 rounded-2xl flex items-center justify-between text-xs">
+          <div className="p-3 bg-red-950/60 border-2 border-red-500/60 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs">
             <span className="font-bold text-red-200">
               ⚠️ La casa ganó la mano. ¡Para salvar tu ronda y ganar fichas, responde el reto de inglés!
             </span>
-            <span className="text-gray-400 font-mono">
-              Tema: {activity?.title || 'General'}
-            </span>
+
+            {onGenerateTurnQuestion && (
+              <button
+                type="button"
+                onClick={handleRegenerateTurnQuestion}
+                disabled={isGeneratingIA}
+                className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{isGeneratingIA ? 'Generando...' : '⚡ Generar Otro Reto IA'}</span>
+              </button>
+            )}
           </div>
 
           <QuestionCard
@@ -496,6 +553,8 @@ export default function BlackjackGame({
             activeStudent={activeStudent}
             showNextButton={true}
             onNext={handleNextTurn}
+            onRegenerateQuestion={onGenerateTurnQuestion ? handleRegenerateTurnQuestion : null}
+            isRegenerating={isGeneratingIA}
           />
         </div>
       )}
