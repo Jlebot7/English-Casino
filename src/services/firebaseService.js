@@ -46,13 +46,6 @@ export function initFirebase(customConfig = null) {
   }
 }
 
-export function getFirebaseAppInstance() {
-  if (!firebaseApp && getApps().length) {
-    firebaseApp = getApp();
-  }
-  return firebaseApp;
-}
-
 export function getStoredFirebaseConfig() {
   try {
     const raw = localStorage.getItem(FIREBASE_CONFIG_KEY);
