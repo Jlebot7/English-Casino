@@ -157,7 +157,7 @@ La aplicación está diseñada para ser proyectada en el aula (o smartboard) sin
 ### 🌟 5.2 Regla de Exoneración por Suerte ("Tener Suerte")
 El alumno elige sus variables de casino y prueba su suerte:
 
-* 🎰 **Lucky Slots**: Elige su apuesta y tira de la palanca.
+*  **Lucky Slots**: Elige su apuesta y tira de la palanca.
   * **Si coinciden 2 o 3 rodillos**: **¡QUEDA EXONERADO!** Cobra sus fichas ganadas y **NO** responde ninguna pregunta.
   * **Si no coinciden**: Aparece el reto de inglés. Debe responder para salvar su turno.
 * 🎡 **Ruleta Vegas**: Elige su apuesta y predice el color (🔴 Rojo, ⚫ Negro o 🟡 Jackpot).
