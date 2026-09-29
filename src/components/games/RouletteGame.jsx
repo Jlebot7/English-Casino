@@ -39,15 +39,18 @@ export default function RouletteGame({
   const [isGeneratingIA, setIsGeneratingIA] = useState(false);
 
   const rotationRef = useRef(0);
+  const ballAngleRef = useRef(-Math.PI / 2);
+  const ballDistRef = useRef(145);
   const lastTickSliceRef = useRef(-1);
+  const animationFrameRef = useRef(null);
 
   const questions = activity?.questions || [];
   const currentQuestion = turnQuestionOverride || questions[currentQuestionIndex % (questions.length || 1)];
   const numSlices = SLICES.length;
   const sliceAngle = (2 * Math.PI) / numSlices;
 
-  // Draw Roulette Wheel
-  const drawWheel = (rotation) => {
+  // Draw Roulette Wheel with Ball Track and Ball
+  const drawWheel = (rotation, ballAngle, ballDist, settledSliceIdx = -1) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -55,48 +58,73 @@ export default function RouletteGame({
     const height = canvas.height;
     const centerX = width / 2;
     const centerY = height / 2;
-    const radius = width / 2 - 14;
+    const outerRadius = width / 2 - 10;
+    const trackRadius = outerRadius - 12;
+    const wheelRadius = outerRadius - 22;
 
     ctx.clearRect(0, 0, width, height);
 
-    // Outer Rim
+    // 1. Mahogany / Metallic Outer Rim
     ctx.save();
     ctx.beginPath();
-    ctx.arc(centerX, centerY, radius + 10, 0, 2 * Math.PI);
-    ctx.fillStyle = '#b45309';
+    ctx.arc(centerX, centerY, outerRadius + 8, 0, 2 * Math.PI);
+    const rimGrad = ctx.createRadialGradient(centerX, centerY, wheelRadius, centerX, centerY, outerRadius + 8);
+    rimGrad.addColorStop(0, '#78350f');
+    rimGrad.addColorStop(0.7, '#451a03');
+    rimGrad.addColorStop(1, '#1c1917');
+    ctx.fillStyle = rimGrad;
     ctx.fill();
     ctx.lineWidth = 4;
-    ctx.strokeStyle = '#fef08a';
+    ctx.strokeStyle = '#f59e0b';
     ctx.stroke();
 
-    // Rivets
-    const totalRivets = 24;
-    for (let i = 0; i < totalRivets; i++) {
-      const rAngle = (i * 2 * Math.PI) / totalRivets;
-      const rx = centerX + (radius + 5) * Math.cos(rAngle);
-      const ry = centerY + (radius + 5) * Math.sin(rAngle);
+    // 2. Ball Track (Pista de la bolita)
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, trackRadius + 8, 0, 2 * Math.PI);
+    ctx.arc(centerX, centerY, wheelRadius, 0, 2 * Math.PI, true);
+    ctx.fillStyle = '#090d16';
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
+    ctx.stroke();
+
+    // Deflectors (Los rombos metálicos)
+    const deflectorsCount = 8;
+    for (let d = 0; d < deflectorsCount; d++) {
+      const defAngle = (d * 2 * Math.PI) / deflectorsCount;
+      const dx = centerX + trackRadius * Math.cos(defAngle);
+      const dy = centerY + trackRadius * Math.sin(defAngle);
+
+      ctx.save();
+      ctx.translate(dx, dy);
+      ctx.rotate(defAngle + Math.PI / 4);
       ctx.beginPath();
-      ctx.arc(rx, ry, 3, 0, 2 * Math.PI);
-      ctx.fillStyle = i % 2 === 0 ? '#fef08a' : '#ffffff';
+      ctx.rect(-3, -3, 6, 6);
+      ctx.fillStyle = '#fef08a';
       ctx.fill();
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
     }
     ctx.restore();
 
-    // Slices
+    // 3. Slices (Wheel Pockets)
     for (let i = 0; i < numSlices; i++) {
       const startAngle = rotation + i * sliceAngle;
       const endAngle = startAngle + sliceAngle;
       const slice = SLICES[i];
+      const isWinnerSlice = settledSliceIdx === i;
 
       ctx.save();
       ctx.beginPath();
       ctx.moveTo(centerX, centerY);
-      ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+      ctx.arc(centerX, centerY, wheelRadius, startAngle, endAngle);
       ctx.closePath();
-      ctx.fillStyle = slice.color;
+      ctx.fillStyle = isWinnerSlice ? '#f59e0b' : slice.color;
       ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = isWinnerSlice ? 3 : 1.5;
+      ctx.strokeStyle = isWinnerSlice ? '#ffffff' : '#fef08a';
       ctx.stroke();
 
       // Text label inside slice
@@ -104,38 +132,86 @@ export default function RouletteGame({
       ctx.translate(centerX, centerY);
       ctx.rotate(startAngle + sliceAngle / 2);
       ctx.textAlign = 'right';
-      ctx.fillStyle = slice.textColor;
+      ctx.fillStyle = isWinnerSlice ? '#000000' : slice.textColor;
       ctx.font = 'bold 12px system-ui, sans-serif';
-      ctx.shadowColor = 'rgba(0,0,0,0.8)';
-      ctx.shadowBlur = 4;
-      ctx.fillText(slice.label, radius - 20, 5);
+      ctx.shadowColor = isWinnerSlice ? 'transparent' : 'rgba(0,0,0,0.85)';
+      ctx.shadowBlur = isWinnerSlice ? 0 : 4;
+      ctx.fillText(slice.label, wheelRadius - 16, 5);
       ctx.restore();
 
       ctx.restore();
     }
 
-    // Inner Hub
+    // 4. Center Vegas Hub
     ctx.save();
     ctx.beginPath();
-    ctx.arc(centerX, centerY, 36, 0, 2 * Math.PI);
-    ctx.fillStyle = '#1e293b';
+    ctx.arc(centerX, centerY, 34, 0, 2 * Math.PI);
+    const hubGrad = ctx.createRadialGradient(centerX - 4, centerY - 4, 2, centerX, centerY, 34);
+    hubGrad.addColorStop(0, '#fef08a');
+    hubGrad.addColorStop(0.5, '#d97706');
+    hubGrad.addColorStop(1, '#0f172a');
+    ctx.fillStyle = hubGrad;
     ctx.fill();
     ctx.lineWidth = 3;
-    ctx.strokeStyle = '#f59e0b';
+    ctx.strokeStyle = '#fef08a';
     ctx.stroke();
 
-    ctx.fillStyle = '#fef08a';
-    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'black 13px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('VEGAS', centerX, centerY - 4);
-    ctx.font = '8px system-ui';
-    ctx.fillText('ROULETTE', centerX, centerY + 10);
+    ctx.font = 'bold 8px system-ui';
+    ctx.fillText('ROULETTE', centerX, centerY + 8);
     ctx.restore();
+
+    // 5. The Authentic Roulette Ball (La Bolita)
+    if (typeof ballDist === 'number' && ballDist > 0) {
+      const bx = centerX + ballDist * Math.cos(ballAngle);
+      const by = centerY + ballDist * Math.sin(ballAngle);
+
+      ctx.save();
+      // Drop Shadow
+      ctx.beginPath();
+      ctx.arc(bx + 2.5, by + 3, 6, 0, 2 * Math.PI);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+      ctx.filter = 'blur(2px)';
+      ctx.fill();
+      ctx.filter = 'none';
+
+      // Golden Halo if settled
+      if (settledSliceIdx >= 0) {
+        ctx.beginPath();
+        ctx.arc(bx, by, 10, 0, 2 * Math.PI);
+        ctx.strokeStyle = 'rgba(254, 240, 138, 0.8)';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+      }
+
+      // Ball Body
+      ctx.beginPath();
+      ctx.arc(bx, by, 6.5, 0, 2 * Math.PI);
+      const ballGrad = ctx.createRadialGradient(bx - 2, by - 2.5, 1, bx, by, 7);
+      ballGrad.addColorStop(0, '#ffffff');
+      ballGrad.addColorStop(0.3, '#f8fafc');
+      ballGrad.addColorStop(0.75, '#cbd5e1');
+      ballGrad.addColorStop(1, '#475569');
+      ctx.fillStyle = ballGrad;
+      ctx.fill();
+      ctx.lineWidth = 0.8;
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.stroke();
+      ctx.restore();
+    }
   };
 
   useEffect(() => {
-    drawWheel(0);
+    drawWheel(0, -Math.PI / 2, 145, -1);
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
   }, []);
 
   const spinRoulette = () => {
@@ -155,36 +231,70 @@ export default function RouletteGame({
     setWinningSlice(null);
     setTurnQuestionOverride(null);
 
-    // Random velocity
-    let velocity = 0.38 + Math.random() * 0.25;
-    const friction = 0.987;
+    // Realistic wheel + ball counter-rotation
+    let wheelVelocity = 0.16 + Math.random() * 0.08;
+    const wheelFriction = 0.992;
+
+    let ballVelocity = -(0.52 + Math.random() * 0.22);
+    const ballFriction = 0.985;
+
+    const outerTrackDist = 145;
+    const pocketDist = 108;
+    let ballDist = outerTrackDist;
 
     const animate = () => {
-      rotationRef.current += velocity;
-      velocity *= friction;
+      rotationRef.current += wheelVelocity;
+      wheelVelocity *= wheelFriction;
 
-      // Pointer angle check
-      const pointerAngle = (3 * Math.PI / 2 - (rotationRef.current % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-      const currentSliceIdx = Math.floor(pointerAngle / sliceAngle) % numSlices;
+      ballAngleRef.current += ballVelocity;
+      ballVelocity *= ballFriction;
+
+      const currentBallSpeed = Math.abs(ballVelocity);
+
+      if (currentBallSpeed > 0.14) {
+        ballDist = outerTrackDist;
+      } else if (currentBallSpeed > 0.025) {
+        const dropRatio = (0.14 - currentBallSpeed) / (0.14 - 0.025);
+        ballDist = outerTrackDist - dropRatio * (outerTrackDist - pocketDist);
+
+        const relativeAngle = ((ballAngleRef.current - rotationRef.current) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+        const bounce = Math.abs(Math.sin(relativeAngle * numSlices)) * (currentBallSpeed * 40);
+        ballDist += bounce;
+      } else {
+        ballDist = pocketDist;
+      }
+
+      ballDistRef.current = ballDist;
+
+      // Sound tick as ball passes pocket frets
+      const relAngle = ((ballAngleRef.current - rotationRef.current) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+      const currentSliceIdx = Math.floor(relAngle / sliceAngle) % numSlices;
 
       if (currentSliceIdx !== lastTickSliceRef.current) {
         sounds.playTick();
         lastTickSliceRef.current = currentSliceIdx;
       }
 
-      drawWheel(rotationRef.current);
+      drawWheel(rotationRef.current, ballAngleRef.current, ballDist, -1);
 
-      if (velocity > 0.002) {
-        requestAnimationFrame(animate);
+      if (currentBallSpeed > 0.003) {
+        animationFrameRef.current = requestAnimationFrame(animate);
       } else {
         setIsSpinning(false);
         const landedSlice = SLICES[currentSliceIdx];
         setWinningSlice(landedSlice);
+
+        // Lock ball into the exact center of winning slice
+        const settledAngle = rotationRef.current + currentSliceIdx * sliceAngle + sliceAngle / 2;
+        ballAngleRef.current = settledAngle;
+        ballDistRef.current = pocketDist;
+
+        drawWheel(rotationRef.current, settledAngle, pocketDist, currentSliceIdx);
         evaluateLuck(landedSlice);
       }
     };
 
-    requestAnimationFrame(animate);
+    animationFrameRef.current = requestAnimationFrame(animate);
   };
 
   const evaluateLuck = (landedSlice) => {
@@ -347,10 +457,6 @@ export default function RouletteGame({
       <div className="bg-gradient-to-b from-blue-950/40 via-gray-950 to-black border-4 border-amber-500 rounded-3xl p-6 shadow-2xl relative overflow-hidden text-center">
         {/* Wheel Canvas Container */}
         <div className="relative inline-block my-2">
-          {/* Top Pointer */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2 z-20 pointer-events-none drop-shadow-lg">
-            <div className="w-0 h-0 border-l-[14px] border-l-transparent border-r-[14px] border-r-transparent border-t-[24px] border-t-amber-400" />
-          </div>
 
           <canvas
             ref={canvasRef}

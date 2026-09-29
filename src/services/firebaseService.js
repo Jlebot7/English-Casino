@@ -69,6 +69,13 @@ export function isFirebaseConfigured() {
   return db !== null;
 }
 
+export function getFirebaseAppInstance() {
+  if (!firebaseApp && getApps().length > 0) {
+    firebaseApp = getApp();
+  }
+  return firebaseApp;
+}
+
 // Generate a random 6-character room PIN (e.g. 777WIN, LUCK88)
 export function generateGamePin() {
   const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';

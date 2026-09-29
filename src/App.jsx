@@ -102,6 +102,7 @@ export default function App() {
   const students = activeClassroom.students || [];
 
   const [activeStudentIndex, setActiveStudentIndex] = useState(0);
+  const [hasChosenTurnStudent, setHasChosenTurnStudent] = useState(false);
   const activeStudent = students.length > 0 ? (students[activeStudentIndex] || students[0]) : null;
 
   // Active Daily Session & Persistent History
@@ -232,6 +233,7 @@ export default function App() {
   const handleSelectClassroom = (id) => {
     setActiveClassroomId(id);
     setActiveStudentIndex(0);
+    setHasChosenTurnStudent(false);
     const targetC = classrooms.find(c => c.id === id);
     if (targetC && activeSession) {
       setActiveSession(prev => ({
@@ -365,6 +367,7 @@ export default function App() {
     freshSession.challengeType = activeSession?.challengeType || 'random';
     freshSession.completedStudentIds = [];
     setActiveSession(freshSession);
+    setHasChosenTurnStudent(false);
 
     sounds.playJackpot();
     alert('✅ Sesión diaria cerrada con éxito. La nueva sesión está limpia con todos los alumnos listos para participar.');
@@ -375,6 +378,7 @@ export default function App() {
       ...prev,
       completedStudentIds: []
     }));
+    setHasChosenTurnStudent(false);
     sounds.playChips();
   };
 
@@ -463,6 +467,7 @@ export default function App() {
     if (idx !== -1) {
       setActiveStudentIndex(idx);
     }
+    setHasChosenTurnStudent(true);
     // Mark as participated in today's session
     setActiveSession(prev => {
       const existing = prev?.completedStudentIds || [];
@@ -529,6 +534,7 @@ export default function App() {
             onSelectClassroom={handleSelectClassroom}
             students={students}
             activeStudent={activeStudent}
+            hasChosenTurnStudent={hasChosenTurnStudent}
             completedStudentIds={activeSession?.completedStudentIds || []}
             onOpenSpinner={() => setIsSpinnerOpen(true)}
             onOpenRosterModal={() => {

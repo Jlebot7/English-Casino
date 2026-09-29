@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Sparkles, Users, Disc3, Dices, School, ArrowRight } from 'lucide-react';
 import { sounds } from '../utils/soundEffects';
 
@@ -12,6 +12,7 @@ export default function StudentLobby({
   onSelectClassroom,
   students = [],
   activeStudent,
+  hasChosenTurnStudent = false,
   completedStudentIds = [],
   onOpenSpinner,
   onOpenRosterModal,
@@ -22,6 +23,16 @@ export default function StudentLobby({
   onOpenAuthModal
 }) {
   const currentClassroom = classrooms.find(c => c.id === activeClassroomId) || classrooms[0];
+  const gamesSectionRef = useRef(null);
+
+  // Smoothly scroll down towards the games panel when a student is picked from the roulette
+  useEffect(() => {
+    if (hasChosenTurnStudent && gamesSectionRef.current) {
+      setTimeout(() => {
+        gamesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
+    }
+  }, [hasChosenTurnStudent]);
 
   const handleLaunchMachine = (machineType) => {
     sounds.playChips();
@@ -66,7 +77,7 @@ export default function StudentLobby({
                     onOpenRosterModal();
                   }
                 }}
-                className="text-xs text-amber-400 hover:underline font-bold flex items-center gap-1"
+                className="text-xs text-amber-400 hover:underline font-bold flex items-center gap-1 cursor-pointer"
               >
                 <span>Gestionar Salones</span>
                 {!currentTeacher && <span className="text-[10px]">🔒</span>}
@@ -120,7 +131,7 @@ export default function StudentLobby({
                   onOpenRosterModal();
                 }
               }}
-              className="text-xs text-gray-300 hover:text-white font-semibold flex items-center gap-1.5"
+              className="text-xs text-gray-300 hover:text-white font-semibold flex items-center gap-1.5 cursor-pointer"
             >
               <Users className="w-3.5 h-3.5 text-amber-400" />
               <span>Ver lista de alumnos ({students.length})</span>
@@ -140,15 +151,15 @@ export default function StudentLobby({
                 Sorteo Diario • {students.filter(s => !completedStudentIds.includes(s.id)).length} pendientes de {students.length}
               </span>
 
-              {activeStudent && (
+              {activeStudent && hasChosenTurnStudent && (
                 <span className="text-xs font-mono font-bold text-amber-400 bg-black/40 px-2 py-0.5 rounded-full border border-amber-500/20">
                   💰 {activeStudent.chips || 1000} Fichas
                 </span>
               )}
             </div>
 
-            {activeStudent ? (
-              <div className="p-4 bg-black/40 border border-purple-500/30 rounded-2xl flex items-center gap-4">
+            {hasChosenTurnStudent && activeStudent ? (
+              <div className="p-4 bg-black/40 border border-purple-500/30 rounded-2xl flex items-center gap-4 animate-fadeIn">
                 <div className="w-14 h-14 rounded-2xl bg-purple-500/20 border-2 border-purple-400 flex items-center justify-center text-3xl shadow-lg">
                   {activeStudent.avatar || '🎩'}
                 </div>
@@ -163,8 +174,11 @@ export default function StudentLobby({
                 </div>
               </div>
             ) : (
-              <div className="p-4 bg-black/40 border border-gray-800 rounded-2xl text-center text-gray-400 text-xs">
-                Aún no has seleccionado un estudiante para este turno.
+              <div className="p-5 bg-black/40 border border-dashed border-gray-800 rounded-2xl text-center text-gray-300 text-xs space-y-1">
+                <p className="font-bold text-amber-300 text-sm">🎲 Turno Pendiente de Sorteo</p>
+                <p className="text-gray-400 text-xs">
+                  Gira la ruleta de alumnos para elegir al participante del turno y desplegar las máquinas de juego.
+                </p>
               </div>
             )}
           </div>
@@ -221,153 +235,163 @@ export default function StudentLobby({
         </div>
       </div>
 
-      {/* Active Educational Topic / Activity Banner */}
-      <div className="p-4 bg-gradient-to-r from-amber-950/30 via-gray-900 to-black border-2 border-amber-500/40 rounded-3xl flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30">
-            <Sparkles className="w-5 h-5" />
+      {/* Conditional Game Machines Panel: Hidden until a student falls in the initial roulette */}
+      {!hasChosenTurnStudent ? (
+        <div className="p-8 bg-gradient-to-b from-gray-950 via-gray-900 to-black border-2 border-dashed border-amber-500/30 rounded-3xl text-center space-y-4 shadow-xl animate-fadeIn">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border-2 border-amber-500/40 mx-auto flex items-center justify-center text-3xl animate-bounce">
+            🎰
           </div>
           <div>
-            <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">Actividad / Tema Activo:</span>
-            <h4 className="text-base font-black text-white">
-              {currentActivity?.title || 'Irregular Verbs Jackpot'}
-            </h4>
-            <p className="text-xs text-gray-400">
-              {currentActivity?.questions?.length || 6} desafíos preparados • Nivel {currentActivity?.level || 'B1'}
+            <h3 className="text-xl md:text-2xl font-black text-white">
+              Máquinas de Casino Ocultas
+            </h3>
+            <p className="text-xs md:text-sm text-gray-400 max-w-md mx-auto mt-1 leading-relaxed">
+              Gira la ruleta de alumnos para seleccionar quién jugará en este turno. Al caer la bolita en el alumno elegido, <strong>el panel de juegos se desplegará automáticamente</strong> para que pruebe su suerte.
             </p>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Activity Selector Dropdown */}
-          {activities.length > 1 && (
-            <select
-              value={currentActivity?.id || ''}
-              onChange={(e) => {
-                const act = activities.find(a => a.id === e.target.value);
-                if (act && onSelectActivity) onSelectActivity(act);
-              }}
-              className="bg-black/60 border border-gray-700 text-xs text-gray-200 font-semibold rounded-xl px-3 py-2 focus:outline-none focus:border-amber-400"
-            >
-              {activities.map((act) => (
-                <option key={act.id} value={act.id}>
-                  {act.title}
-                </option>
-              ))}
-            </select>
-          )}
-
           <button
             onClick={() => {
-              sounds.playTick();
-              if (!currentTeacher && onOpenAuthModal) {
-                onOpenAuthModal('acceder al Panel Docente para configurar temas y preguntas', onOpenTeacherPortal);
-              } else {
-                onOpenTeacherPortal();
-              }
+              sounds.playChips();
+              if (onOpenSpinner) onOpenSpinner();
             }}
-            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 text-black font-bold text-xs rounded-xl shadow transition cursor-pointer flex items-center gap-1.5"
+            className="px-8 py-3.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl shadow-xl shadow-purple-950/60 transition transform hover:scale-105 active:scale-95 cursor-pointer inline-flex items-center gap-2"
           >
-            <span>👨‍🏫 Panel Docente (IA Groq)</span>
-            {!currentTeacher && <span className="text-xs">🔒</span>}
+            <Disc3 className="w-4 h-4 text-yellow-300 animate-spin" />
+            <span>🎲 Girar Ruleta de Alumnos</span>
           </button>
         </div>
-      </div>
+      ) : (
+        <div ref={gamesSectionRef} className="space-y-6 animate-fadeIn">
+          {/* Turn Unfolded Banner */}
+          <div className="p-5 bg-gradient-to-r from-purple-950/70 via-amber-950/40 to-black border-2 border-amber-500/60 rounded-3xl flex flex-wrap items-center justify-between gap-4 shadow-2xl">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border-2 border-amber-400 flex items-center justify-center text-3xl shadow-lg">
+                {activeStudent?.avatar || '🎩'}
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-black text-amber-400 tracking-widest bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
+                  🎯 Turno Desbloqueado • ¡A Jugar!
+                </span>
+                <h3 className="text-xl md:text-2xl font-black text-white mt-1">
+                  {activeStudent?.name}
+                </h3>
+                <p className="text-xs text-gray-300">
+                  Configura tu apuesta y prueba tu suerte. <strong>¡Si tienes suerte te exonerarás de la pregunta!</strong>
+                </p>
+              </div>
+            </div>
 
-      {/* The 3 Casino Machines Cards */}
-      <div>
-        <div className="text-center mb-5">
-          <h3 className="text-xl md:text-2xl font-black text-white">
-            🎰 Selecciona la Máquina de Juego
-          </h3>
-          <p className="text-xs text-gray-400">
-            El alumno elegido configurará su apuesta y probará su suerte. Si gana, ¡se exonera de la pregunta!
-          </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  sounds.playChips();
+                  if (onOpenSpinner) onOpenSpinner();
+                }}
+                className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow"
+                title="Sortear a otro alumno con la ruleta"
+              >
+                <Disc3 className="w-3.5 h-3.5 text-yellow-300 animate-spin" />
+                <span>Sortear otro alumno ↻</span>
+              </button>
+            </div>
+          </div>
+
+          {/* The 3 Casino Machines Cards */}
+          <div>
+            <div className="text-center mb-5">
+              <h3 className="text-xl md:text-2xl font-black text-white">
+                🎰 Selecciona la Máquina de Juego
+              </h3>
+              <p className="text-xs text-gray-400">
+                El alumno elegido configurará su apuesta y probará su suerte. Si gana, ¡se exonera de la pregunta!
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {/* Slots Machine Card */}
+              <div
+                onClick={() => handleLaunchMachine('slots')}
+                className="bg-gradient-to-b from-red-950/40 via-gray-900 to-black border-2 border-red-500/50 hover:border-red-400 rounded-3xl p-6 shadow-xl transition-all transform hover:scale-[1.03] cursor-pointer group flex flex-col justify-between"
+              >
+                <div>
+                  <div className="w-14 h-14 rounded-2xl bg-red-600/20 border border-red-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition">
+                    🎰
+                  </div>
+                  <h4 className="text-lg font-black text-white mb-1 group-hover:text-red-300 transition">
+                    Lucky Slots
+                  </h4>
+                  <p className="text-xs text-gray-400 leading-relaxed mb-4">
+                    El alumno elige su apuesta y tira de la palanca. <strong>¡Si coinciden 2 o 3 figuras queda EXONERADO!</strong> Si no hay coincidencia, responde el reto de inglés.
+                  </p>
+                </div>
+
+                <div className="pt-3 border-t border-red-900/40 flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-red-400 uppercase tracking-wider">
+                    Exoneración: Coincidencia
+                  </span>
+                  <span className="px-3 py-1.5 rounded-xl bg-red-600 text-white font-bold text-xs flex items-center gap-1 group-hover:bg-red-500 transition">
+                    Jugar <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              </div>
+
+              {/* Roulette Machine Card */}
+              <div
+                onClick={() => handleLaunchMachine('roulette')}
+                className="bg-gradient-to-b from-blue-950/40 via-gray-900 to-black border-2 border-blue-500/50 hover:border-blue-400 rounded-3xl p-6 shadow-xl transition-all transform hover:scale-[1.03] cursor-pointer group flex flex-col justify-between"
+              >
+                <div>
+                  <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition">
+                    🎡
+                  </div>
+                  <h4 className="text-lg font-black text-white mb-1 group-hover:text-blue-300 transition">
+                    Ruleta Vegas
+                  </h4>
+                  <p className="text-xs text-gray-400 leading-relaxed mb-4">
+                    La bolita corre por la pista giratoria. <strong>¡Si la bolilla acierta 2 de los 3 criterios queda EXONERADO!</strong> Si no, responde la pregunta de la categoría.
+                  </p>
+                </div>
+
+                <div className="pt-3 border-t border-blue-900/40 flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-blue-400 uppercase tracking-wider">
+                    Exoneración: 2 de 3 Aciertos
+                  </span>
+                  <span className="px-3 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center gap-1 group-hover:bg-blue-500 transition">
+                    Jugar <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              </div>
+
+              {/* Blackjack Machine Card */}
+              <div
+                onClick={() => handleLaunchMachine('blackjack')}
+                className="bg-gradient-to-b from-emerald-950/40 via-gray-900 to-black border-2 border-emerald-500/50 hover:border-emerald-400 rounded-3xl p-6 shadow-xl transition-all transform hover:scale-[1.03] cursor-pointer group flex flex-col justify-between"
+              >
+                <div>
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-600/20 border border-emerald-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition">
+                    🃏
+                  </div>
+                  <h4 className="text-lg font-black text-white mb-1 group-hover:text-emerald-300 transition">
+                    21 Blackjack
+                  </h4>
+                  <p className="text-xs text-gray-400 leading-relaxed mb-4">
+                    El alumno juega su mano contra el crupier. <strong>¡Si gana la mano o hace 21 queda EXONERADO!</strong> Si pierde o se pasa, responde el reto de inglés para salvarse.
+                  </p>
+                </div>
+
+                <div className="pt-3 border-t border-emerald-900/40 flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
+                    Exoneración: Vencer a Casa
+                  </span>
+                  <span className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs flex items-center gap-1 group-hover:bg-emerald-500 transition">
+                    Jugar <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {/* Slots Machine Card */}
-          <div
-            onClick={() => handleLaunchMachine('slots')}
-            className="bg-gradient-to-b from-red-950/40 via-gray-900 to-black border-2 border-red-500/50 hover:border-red-400 rounded-3xl p-6 shadow-xl transition-all transform hover:scale-[1.03] cursor-pointer group flex flex-col justify-between"
-          >
-            <div>
-              <div className="w-14 h-14 rounded-2xl bg-red-600/20 border border-red-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition">
-                🎰
-              </div>
-              <h4 className="text-lg font-black text-white mb-1 group-hover:text-red-300 transition">
-                Lucky Slots
-              </h4>
-              <p className="text-xs text-gray-400 leading-relaxed mb-4">
-                El alumno elige su apuesta y tira de la palanca. <strong>¡Si coinciden 2 o 3 figuras queda EXONERADO!</strong> Si no hay coincidencia, responde el reto de inglés.
-              </p>
-            </div>
-
-            <div className="pt-3 border-t border-red-900/40 flex items-center justify-between">
-              <span className="text-[11px] font-bold text-red-400 uppercase tracking-wider">
-                Exoneración: Coincidencia
-              </span>
-              <span className="px-3 py-1.5 rounded-xl bg-red-600 text-white font-bold text-xs flex items-center gap-1 group-hover:bg-red-500 transition">
-                Jugar <ArrowRight className="w-3.5 h-3.5" />
-              </span>
-            </div>
-          </div>
-
-          {/* Roulette Machine Card */}
-          <div
-            onClick={() => handleLaunchMachine('roulette')}
-            className="bg-gradient-to-b from-blue-950/40 via-gray-900 to-black border-2 border-blue-500/50 hover:border-blue-400 rounded-3xl p-6 shadow-xl transition-all transform hover:scale-[1.03] cursor-pointer group flex flex-col justify-between"
-          >
-            <div>
-              <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition">
-                🎡
-              </div>
-              <h4 className="text-lg font-black text-white mb-1 group-hover:text-blue-300 transition">
-                Ruleta Vegas
-              </h4>
-              <p className="text-xs text-gray-400 leading-relaxed mb-4">
-                El alumno apuesta a un color (Rojo, Negro o Jackpot Dorado). <strong>¡Si la bolilla acierta su predicción queda EXONERADO!</strong> Si no, responde la pregunta de la categoría.
-              </p>
-            </div>
-
-            <div className="pt-3 border-t border-blue-900/40 flex items-center justify-between">
-              <span className="text-[11px] font-bold text-blue-400 uppercase tracking-wider">
-                Exoneración: Acierto Color
-              </span>
-              <span className="px-3 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center gap-1 group-hover:bg-blue-500 transition">
-                Jugar <ArrowRight className="w-3.5 h-3.5" />
-              </span>
-            </div>
-          </div>
-
-          {/* Blackjack Machine Card */}
-          <div
-            onClick={() => handleLaunchMachine('blackjack')}
-            className="bg-gradient-to-b from-emerald-950/40 via-gray-900 to-black border-2 border-emerald-500/50 hover:border-emerald-400 rounded-3xl p-6 shadow-xl transition-all transform hover:scale-[1.03] cursor-pointer group flex flex-col justify-between"
-          >
-            <div>
-              <div className="w-14 h-14 rounded-2xl bg-emerald-600/20 border border-emerald-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition">
-                🃏
-              </div>
-              <h4 className="text-lg font-black text-white mb-1 group-hover:text-emerald-300 transition">
-                21 Blackjack
-              </h4>
-              <p className="text-xs text-gray-400 leading-relaxed mb-4">
-                El alumno juega su mano contra el crupier. <strong>¡Si gana la mano o hace 21 queda EXONERADO!</strong> Si pierde o se pasa, responde el reto de inglés para salvarse.
-              </p>
-            </div>
-
-            <div className="pt-3 border-t border-emerald-900/40 flex items-center justify-between">
-              <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
-                Exoneración: Vencer a Casa
-              </span>
-              <span className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs flex items-center gap-1 group-hover:bg-emerald-500 transition">
-                Jugar <ArrowRight className="w-3.5 h-3.5" />
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
