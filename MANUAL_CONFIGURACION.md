@@ -1,6 +1,6 @@
 # 📖 Manual Completo de Configuración: Lucky English Casino
 
-Bienvenido a la guía paso a paso para configurar y personalizar **Lucky English Casino**. Este manual te guiará detalladamente en la configuración de **Firebase Firestore**, la **API de Groq**, el **sistema de Text-to-Speech (TTS)**, la **gestión de salones y alumnos**, y el **despliegue en GitHub Pages**.
+Bienvenido a la guía paso a paso para configurar y personalizar **Lucky English Casino**. Este manual te guiará detalladamente en la configuración de **Firebase Firestore**, la **API de Groq**, el **sistema de Text-to-Speech (TTS)**, la **gestión de salones y alumnos**, la **gestión de sesiones diarias con historial** y el **despliegue en GitHub Pages**.
 
 ---
 
@@ -8,9 +8,10 @@ Bienvenido a la guía paso a paso para configurar y personalizar **Lucky English
 1. [Configuración de Firebase Firestore (Backend en la Nube)](#1-configuración-de-firebase-firestore)
 2. [Configuración de Groq API (Generador de Preguntas con IA)](#2-configuración-de-groq-api)
 3. [Ajustes de Sonido y Text-to-Speech (TTS)](#3-ajustes-de-sonido-y-text-to-speech-tts)
-4. [Gestión de Salones y Carga de Estudiantes](#4-gestión-de-salones-y-carga-de-estudiantes)
-5. [Despliegue y Publicación en GitHub Pages](#5-despliegue-y-publicación-en-github-pages)
-6. [Preguntas Frecuentes y Solución de Problemas](#6-preguntas-frecuentes)
+4. [Gestión por Salones, Alumnos y Sesiones Diarias](#4-gestión-por-salones-alumnos-y-sesiones-diarias)
+5. [Dinámica de Aula: Ruleta de Selección y Regla de Exoneración por Suerte](#5-dinámica-de-aula-ruleta-de-selección-y-regla-de-exoneración-por-suerte)
+6. [Despliegue y Publicación en GitHub Pages](#6-despliegue-y-publicación-en-github-pages)
+7. [Preguntas Frecuentes y Solución de Problemas](#7-preguntas-frecuentes)
 
 ---
 
@@ -68,20 +69,8 @@ service cloud.firestore {
 1. En la consola de Firebase, ve al icono de engranaje ⚙️ (arriba a la izquierda) > **"Configuración del proyecto"** (*Project settings*).
 2. En la pestaña **General**, baja hasta la sección *"Tus apps"* y haz clic en el icono web **`</>`**.
 3. Escribe un apodo para la app (ejemplo: `Lucky Casino Web`) y haz clic en **"Registrar app"** (no es necesario marcar Firebase Hosting).
-4. Verás un bloque de código similar a este:
-
-```javascript
-const firebaseConfig = {
-  apiKey: "AIzaSyD-xxxxxxxxxxxxxxxxxxxxxxxxx",
-  authDomain: "tu-proyecto.firebaseapp.com",
-  projectId: "tu-proyecto",
-  storageBucket: "tu-proyecto.appspot.com",
-  messagingSenderId: "123456789012",
-  appId: "1:123456789012:web:abcdef123456"
-};
-```
-
-5. Copia todo ese objeto (puedes copiar desde `{` hasta `}`).
+4. Verás un bloque de código con tus claves `apiKey`, `projectId`, etc.
+5. Copia todo ese objeto (desde `{` hasta `}`).
 
 ---
 
@@ -97,106 +86,126 @@ const firebaseConfig = {
 
 ## 2. Configuración de Groq API
 
-Groq proporciona una velocidad ultrarrápida para que la inteligencia artificial (`Llama 3.3 70B`) redacte preguntas pedagógicas de opción múltiple, explicaciones de reglas gramaticales y vocabulario en cuestión de segundos.
+Groq proporciona una velocidad ultrarrápida para que la inteligencia artificial redacte retos pedagógicos, oraciones, preguntas y explicaciones en milisegundos.
 
-### Paso 2.1: Obtener una API Key Gratuita
-1. Ingresa a la plataforma de Groq: [https://console.groq.com/keys](https://console.groq.com/keys).
-2. Inicia sesión o regístrate gratis con tu cuenta de Google o GitHub.
-3. Haz clic en el botón **"Create API Key"**.
-4. Asígnale un nombre (ej. `LuckyEnglishCasino`) y pulsa **"Submit"**.
-5. Copia la clave generada (empieza por `gsk_...`). *(Guárdala en un lugar seguro ya que solo se muestra una vez).*
+### Modelos Soportados de Groq:
+* **`openai/gpt-oss-120b`**: Modelo de alta inteligencia y precisión gramatical (Recomendado).
+* **`openai/gpt-oss-20b`**: Modelo ultrarrápido, ideal para la generación de retos por turno en tiempo real.
+* **`qwen/qwen3.8-27b`**: Gran precisión en instrucciones de idiomas.
+* **`llama-3.3-70b-versatile`** y **`llama-3.1-8b-instant`**.
 
-### Paso 2.2: Vincular la Clave en la Aplicación
-1. En la aplicación, abre el menú de **⚙️ Ajustes**.
-2. En la pestaña **"Groq AI"**, pega tu clave en el campo *Groq API Key*.
-3. Haz clic en **"Test Connection"**. La aplicación emitirá un sonido de acierto y mostrará `Groq API Key is valid and connected!`.
-4. Haz clic en **"Save Key"**.
+> **Nota importante:** Los modelos antiguos `llama3-8b-8192`, `llama3-70b-8192` y `mixtral-8x7b-32768` fueron retirados por Groq. La app consulta automáticamente tu cuenta para usar solo modelos activos.
 
-> **Privacidad y Costos:** La clave se almacena exclusivamente en tu propio navegador (`localStorage`). Ningún estudiante ni servidor externo tiene acceso a ella y el uso estándar de Groq Cloud es gratuito.
+### Cómo obtener tu clave gratuita de Groq:
+1. Entra a [https://console.groq.com/keys](https://console.groq.com/keys) y crea tu cuenta gratuita.
+2. Haz clic en **"Create API Key"**, copia la clave (empieza con `gsk_...`).
+3. En la app, abre **⚙️ Ajustes**, pega tu clave en **"Groq API Key"** y haz clic en **Guardar**.
 
 ---
 
 ## 3. Ajustes de Sonido y Text-to-Speech (TTS)
 
 La app cuenta con dos motores de audio independientes:
-1. **Sintetizador Web Audio API**: Genera sonidos de casino reales (palancas, rodillos girando, monedas metálicas, fichas y campanadas de acierto) de forma nativa sin cargar archivos externos pesados.
-2. **Text-to-Speech (TTS)**: Pronuncia en inglés nativo las preguntas y las opciones de respuesta.
-
-### Cómo personalizar el Audio y TTS:
-1. Abre **⚙️ Ajustes** y haz clic en la pestaña **"Sound & TTS"**.
-2. **Efectos de Casino**:
-   * **Volumen**: Desliza para subir o bajar el volumen general de los efectos.
-   * **Silenciar**: Usa el botón *Muted / Sound ON* o el altavoz en la barra superior para silenciar rápidamente la clase.
-3. **Pronunciación TTS**:
-   * **Selector de Voz**: Elige entre las voces en inglés instaladas en tu sistema operativo (voces `en-US`, `en-GB`, Google US English, Microsoft Zira, etc.).
-   * **Velocidad de Lectura (Speech Rate)**: 
-     * `0.75x - 0.85x`: Recomendado para niveles A1 y A2 (pronunciación más lenta y pausada).
-     * `0.95x - 1.0x`: Velocidad natural recomendada para niveles B1 a C1.
-4. Haz clic en **"Test Voice & Casino Chimes"** para escuchar una prueba inmediata.
+1. **Sintetizador Web Audio API**: Genera sonidos de casino reales (palancas mecánicas, rodillos girando, monedas metálicas, fichas y campanadas de acierto) de forma nativa.
+2. **Text-to-Speech (TTS)**: Pronuncia en inglés nativo las preguntas, respuestas y oraciones modelo para que toda la clase escuche la pronunciación correcta.
 
 ---
 
-## 4. Gestión de Salones y Carga de Estudiantes
+## 4. Gestión por Salones, Alumnos y Sesiones Diarias
 
-Diseñado para proyectar la app en clase o dinamizar sesiones grupales organizadas por cursos.
+El **Panel Docente** incluye herramientas integrales para la planificación y seguimiento del aula:
 
-### Paso 4.1: Crear o Seleccionar Salones
-1. Haz clic en el botón **`🏫 Salones`** en la barra superior o en el botón del Lobby.
-2. Verás las pestañas con los salones existentes (ej. *7° Básico A*, *8° Básico B*).
-3. Para crear uno nuevo, pulsa en **"➕ Nuevo Salón"**, escribe el nombre del grupo (ej. *Inglés 10° B*, *Conversación Adultos*) y haz clic en **Guardar Salón**.
+### 🏫 4.1 Gestión de Salones y Estudiantes
+En la pestaña **"Salones & Alumnos"**:
+* **Crear / Eliminar Salones**: Organiza tus cursos (ej. *10-A Mañana*, *10-B Tarde*, *Inglés Básico 2*).
+* **Agregar Alumnos**: Ingresa nombres de a uno o pega la lista completa desde Excel / Google Sheets con el botón `📋 Pegar Lista desde Excel`.
+* **Edición de Alumnos**: Puedes editar el nombre de cualquier estudiante o cambiar su avatar.
+* **Estadísticas Acumuladas**: Monitorea fichas ganadas, número de retos acertados y veces que el alumno fue exonerado por suerte.
 
-### Paso 4.2: Agregar Alumnos
-Dentro del salón seleccionado tienes dos opciones:
-* **De a uno**: Escribe el nombre en el campo y pulsa **"Agregar"**.
-* **Pegar lista completa (Excel / Google Sheets)**:
-  1. Haz clic en `📋 Pegar lista completa`.
-  2. Copia la columna de nombres desde tu planilla de cálculo o lista de asistencia.
-  3. Pégala en el cuadro de texto y pulsa **"Importar Estudiantes"**.
-  4. La app asignará automáticamente un avatar temático y 1,000 fichas iniciales a cada alumno.
+### 📅 4.2 Sesión Diaria Activa
+En la pestaña **"Sesión Diaria"**:
+1. **Tema Pedagógico**: Define el tema central de la clase (ej. *Past Continuous & Travel*, *Daily Routines & Frequency Adverbs*).
+2. **Nivel CEFR**: Elige el nivel objetivo (A1, A2, B1, B2, C1).
+3. **Variantes de Preguntas**:
+   * 🎲 **Aleatorio / Mixto**: Combina todos los formatos para dinamismo.
+   * 📝 **Selección Múltiple**: 4 opciones tradicionales (A, B, C, D).
+   * ✏️ **Completar Espacios**: Frases con huecos (`____`).
+   * ➕ **Frases en Afirmativo**: El alumno debe formular en voz alta una oración afirmativa.
+   * ➖ **Frases en Negativo**: El alumno debe formular una oración negativa con auxiliares.
+   * ❓ **Formular Preguntas**: El alumno debe formular una pregunta (Wh- o Yes/No).
+4. **Registro en Vivo**: A medida que los alumnos juegan en el proyector, la tabla de turnos registra en vivo la hora, alumno, máquina jugada, si fue exonerado por suerte o si respondió el reto, aciertos y fichas.
+5. **Finalizar y Guardar Sesión**: Al concluir la clase, presiona **"Guardar y Cerrar Sesión en Historial"** para archivarla permanentemente.
 
-### Paso 4.3: Dinámica de Turnos en las Máquinas
-Cuando juegues en cualquier máquina (**Tragamonedas**, **Ruleta** o **Blackjack**):
-* La barra superior mostrará: `🎯 Turno: [Avatar] Nombre del Alumno`.
-* **🎲 Al Azar**: Elige aleatoriamente al próximo estudiante para mantener a todos atentos.
-* **Siguiente**: Avanza al siguiente alumno en orden de lista.
-* **Selector de Salón**: Puedes cambiar de salón en vivo durante la partida desde el menú desplegable sin perder el progreso.
+### 📜 4.3 Historial Permanente de Sesiones
+En la pestaña **"Historial"**:
+* Revisa todas las sesiones anteriores archivadas por fecha y salón.
+* Consulta el porcentaje de alumnos exonerados por suerte vs los desafiados académicamente y el porcentaje de aciertos.
+* **Ver Turnos Detallados**: Despliega el registro completo de cada alumno en esa sesión.
+* **Reanudar Tema**: Carga con un clic el tema y variantes de una sesión anterior para continuar repasando.
 
 ---
 
-## 5. Despliegue y Publicación en GitHub Pages
+## 5. Dinámica de Aula: Ruleta de Selección y Regla de Exoneración por Suerte
+
+La aplicación está diseñada para ser proyectada en el aula (o smartboard) sin requerir que los estudiantes inicien sesión ni usen dispositivos móviles.
+
+### 🎲 5.1 Sorteo con la Ruleta de Alumnos
+1. En la pantalla principal o durante el juego, presiona **`🎲 GIRAR RULETA DE ALUMNOS`**.
+2. La ruleta física girará con sonidos mecánicos y elegirá a un estudiante al azar con fanfarria de jackpot y confeti 🎉.
+3. El alumno seleccionado pasa al frente o elige sus variables de juego.
+
+### 🌟 5.2 Regla de Exoneración por Suerte ("Tener Suerte")
+El alumno elige sus variables de casino y prueba su suerte:
+
+* 🎰 **Lucky Slots**: Elige su apuesta y tira de la palanca.
+  * **Si coinciden 2 o 3 rodillos**: **¡QUEDA EXONERADO!** Cobra sus fichas ganadas y **NO** responde ninguna pregunta.
+  * **Si no coinciden**: Aparece el reto de inglés. Debe responder para salvar su turno.
+* 🎡 **Ruleta Vegas**: Elige su apuesta y predice el color (🔴 Rojo, ⚫ Negro o 🟡 Jackpot).
+  * **Si acierta**: **¡QUEDA EXONERADO!** Cobra el premio de la mesa sin responder preguntas.
+  * **Si no acierta**: Debe responder la pregunta de la categoría en que cayó la ruleta.
+* 🃏 **21 Blackjack**: Juega su mano contra el crupier (Hit / Stand).
+  * **Si derrota a la casa o hace 21**: **¡QUEDA EXONERADO!** Cobra sus fichas y se salva del reto.
+  * **Si pierde o se pasa**: Debe responder el reto pedagógico para salvar la ronda.
+
+### ⚡ 5.3 Botón "Reto IA" en Cada Turno
+Tanto en la barra superior de turnos como dentro de cada juego (cuando el alumno tiene mala suerte), el docente dispone del botón **`⚡ Reto IA`** (o `⚡ Generar Otro Reto IA`). Al presionarlo, Groq genera instantáneamente una pregunta única y contextualizada al tema de la sesión activa.
+
+### 🗣️ 5.4 Evaluación Oral para el Docente
+En retos orales (crear frases o completar):
+* Botón **`✅ Correcto (+Fichas)`**: Otorga el puntaje y celebra el acierto.
+* Botón **`❌ Incorrecto`**: Registra el fallo y muestra la retroalimentación.
+* Botón **`👁️ Ver Solución Modelo`**: Despliega la frase ideal esperada y permite reproducirla con TTS en inglés nativo.
+
+---
+
+## 6. Despliegue y Publicación en GitHub Pages
 
 Tu proyecto incluye un flujo automatizado en `.github/workflows/deploy.yml`.
 
-### Paso 5.1: Activar GitHub Actions en tu Repositorio
+### Paso 6.1: Activar GitHub Actions en tu Repositorio
 1. Entra a tu repositorio en GitHub: `https://github.com/TU_USUARIO/TU_REPOSITORIO`.
 2. Ve a la pestaña **Settings** (Ajustes).
 3. En la barra lateral izquierda, selecciona **Pages**.
 4. En **Build and deployment** > **Source**, selecciona:
    👉 **`GitHub Actions`**
 
-### Paso 5.2: Subir Cambios y Publicar
+### Paso 6.2: Subir Cambios y Publicar
 Desde la terminal en tu computadora:
 
 ```powershell
-# Verificar estado
-git status
-
-# Subir los cambios al repositorio
-git push
+git add .
+git commit -m "feat: updated casino classroom app"
+git push origin master
 ```
 
-En unos segundos, GitHub compilará el código y tu aplicación estará disponible globalmente en:
-`https://TU_USUARIO.github.io/TU_REPOSITORIO/`
+GitHub Actions compilará la aplicación y la publicará automáticamente en tu URL de GitHub Pages.
 
 ---
 
-## 6. Preguntas Frecuentes
+## 7. Preguntas Frecuentes
 
-### ¿Qué pasa si no configuro Firebase?
-No hay problema. La aplicación detecta automáticamente la ausencia de Firebase y activa el **modo LocalStorage**. Todo lo que crees (salones, alumnos, preguntas y puntajes) se guardará de forma persistente en tu navegador.
+### ¿Necesitan los alumnos instalar algo o registrarse?
+**No.** La aplicación funciona en modo proyección en pantalla gigante o proyector. Todo el control lo gestiona el docente en el aula.
 
-### ¿Los estudiantes necesitan crear una cuenta?
-No. Los estudiantes acceden instantáneamente con el código PIN de 6 caracteres (ej. `VERB77`) o un enlace directo (`?pin=VERB77`) ingresando únicamente su apodo o jugando a través del modo aula proyectado por el docente.
-
-### ¿Cómo reiniciar las fichas de todos los alumnos al terminar el año o periodo?
-Abre el gestor de **Salones**, selecciona el grupo que deseas resetear y presiona el botón **"🔄 Reiniciar Fichas a 1000"**.
+### ¿Se pierden los datos si cierro el navegador?
+**No.** Los salones, alumnos, sesiones diarias e historial quedan guardados de forma segura y persistente en el almacenamiento local (`localStorage`) de tu navegador y sincronizados con Firebase si está conectado.
