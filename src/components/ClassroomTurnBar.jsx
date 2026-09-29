@@ -5,7 +5,6 @@ import { sounds } from '../utils/soundEffects';
 export default function ClassroomTurnBar({
   students = [],
   activeStudent,
-  completedStudentIds = [],
   onNextStudent,
   onOpenSpinner,
   onOpenRosterModal,
@@ -98,9 +97,7 @@ export default function ClassroomTurnBar({
             title="Abrir ruleta de la suerte para sortear estudiante"
           >
             <Disc3 className="w-4 h-4 text-yellow-300 animate-spin" />
-            <span className="hidden sm:inline">
-              Ruleta ({students.filter(s => !completedStudentIds.includes(s.id)).length})
-            </span>
+            <span className="hidden sm:inline">Ruleta Alumnos</span>
           </button>
         )}
 
