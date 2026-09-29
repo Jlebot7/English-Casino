@@ -1,40 +1,41 @@
 // Groq API client for generating English educational activities
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_MODELS_URL = 'https://api.groq.com/openai/v1/models';
+
+export const DEFAULT_MODEL = 'llama-3.1-8b-instant';
 
 export const GROQ_MODELS = [
-  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B (Versatile & Smart)' },
-  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B (Ultra Fast)' },
+  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B (Ultra Fast & Universal)' },
+  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B (High Intelligence)' },
+  { id: 'llama3-70b-8192', name: 'Llama 3 70B (High Capacity)' },
+  { id: 'llama3-8b-8192', name: 'Llama 3 8B (Fast & Reliable)' },
   { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B (High Context)' }
 ];
 
-export async function testGroqConnection(apiKey, model = DEFAULT_MODEL) {
+export async function testGroqConnection(apiKey) {
   if (!apiKey || apiKey.trim() === '') {
     throw new Error('Please enter a valid Groq API Key.');
   }
 
-  const response = await fetch(GROQ_API_URL, {
-    method: 'POST',
+  // Verify the API key by querying the /models endpoint
+  // This verifies key validity directly without model access restrictions
+  const response = await fetch(GROQ_MODELS_URL, {
+    method: 'GET',
     headers: {
-      'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey.trim()}`
-    },
-    body: JSON.stringify({
-      model: model,
-      messages: [
-        { role: 'user', content: 'Respond with the word OK if you can read this.' }
-      ],
-      max_tokens: 10
-    })
+    }
   });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || `Groq API returned HTTP ${response.status}`);
+    throw new Error(errorData.error?.message || `Groq API returned HTTP ${response.status}. Please check your key.`);
   }
 
-  return true;
+  const data = await response.json().catch(() => ({}));
+  const availableModels = Array.isArray(data?.data) ? data.data.map(m => m.id) : [];
+
+  return { success: true, availableModels };
 }
 
 export async function generateEnglishQuiz({
@@ -49,6 +50,15 @@ export async function generateEnglishQuiz({
   if (!apiKey || apiKey.trim() === '') {
     throw new Error('Groq API Key is missing. Please add it in settings.');
   }
+
+  // Model fallback chain: try preferred model first, then universally available fallbacks
+  const candidateModels = [
+    model,
+    'llama-3.1-8b-instant',
+    'llama3-8b-8192',
+    'llama-3.3-70b-versatile',
+    'mixtral-8x7b-32768'
+  ].filter((v, i, a) => a.indexOf(v) === i); // Deduplicate
 
   const systemPrompt = `You are an elite ESL / English Language Teacher and educational game designer.
 Your task is to generate high-quality, engaging English learning quiz questions tailored for a Casino-themed educational game.
@@ -85,56 +95,70 @@ You MUST respond strictly with a valid JSON object matching this schema:
   ]
 }`;
 
-  const response = await fetch(GROQ_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey.trim()}`
-    },
-    body: JSON.stringify({
-      model: model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Generate the ${questionCount} English questions for the topic: "${topic}" at level ${level}. Output only the JSON object.` }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.7,
-      max_tokens: 3000
-    })
-  });
+  let lastError = null;
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || `Groq request failed with status ${response.status}`);
-  }
+  for (const currentModel of candidateModels) {
+    try {
+      const response = await fetch(GROQ_CHAT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey.trim()}`
+        },
+        body: JSON.stringify({
+          model: currentModel,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Generate the ${questionCount} English questions for the topic: "${topic}" at level ${level}. Output only the JSON object.` }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.7,
+          max_tokens: 3000
+        })
+      });
 
-  const data = await response.json();
-  const rawContent = data.choices?.[0]?.message?.content;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const msg = errorData.error?.message || `HTTP ${response.status}`;
+        // If error is model access or not found, try the next fallback model
+        if (msg.includes('model') && (msg.includes('does not exist') || msg.includes('access') || response.status === 404)) {
+          lastError = new Error(msg);
+          continue;
+        }
+        throw new Error(msg);
+      }
 
-  if (!rawContent) {
-    throw new Error('Groq returned an empty response.');
-  }
+      const data = await response.json();
+      const rawContent = data.choices?.[0]?.message?.content;
 
-  try {
-    const parsed = JSON.parse(rawContent);
-    // Sanitize and validate questions
-    if (!parsed.questions || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
-      throw new Error('Generated response does not contain a valid questions list.');
+      if (!rawContent) {
+        throw new Error('Groq returned an empty response.');
+      }
+
+      const parsed = JSON.parse(rawContent);
+      if (!parsed.questions || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
+        throw new Error('Generated response does not contain a valid questions list.');
+      }
+
+      parsed.questions = parsed.questions.map((q, idx) => ({
+        id: q.id || `q_${Date.now()}_${idx}`,
+        question: q.question || 'Missing question',
+        options: Array.isArray(q.options) && q.options.length >= 2 ? q.options : ['Yes', 'No', 'Maybe', 'Never'],
+        correctAnswer: q.correctAnswer || (q.options ? q.options[0] : 'Yes'),
+        explanation: q.explanation || 'No explanation provided.',
+        category: q.category || 'General',
+        points: Number(q.points) || 150
+      }));
+
+      return parsed;
+    } catch (err) {
+      lastError = err;
+      if (err.message && err.message.includes('model') && (err.message.includes('does not exist') || err.message.includes('access'))) {
+        continue;
+      }
+      throw err;
     }
-
-    parsed.questions = parsed.questions.map((q, idx) => ({
-      id: q.id || `q_${Date.now()}_${idx}`,
-      question: q.question || 'Missing question',
-      options: Array.isArray(q.options) && q.options.length >= 2 ? q.options : ['Yes', 'No', 'Maybe', 'Never'],
-      correctAnswer: q.correctAnswer || (q.options ? q.options[0] : 'Yes'),
-      explanation: q.explanation || 'No explanation provided.',
-      category: q.category || 'General',
-      points: Number(q.points) || 150
-    }));
-
-    return parsed;
-  } catch (err) {
-    console.error('Failed to parse Groq JSON response:', rawContent, err);
-    throw new Error(`Failed to parse AI quiz response: ${err.message}`);
   }
+
+  throw lastError || new Error('Failed to generate quiz with available Groq models.');
 }
