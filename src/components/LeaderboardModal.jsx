@@ -108,7 +108,7 @@ export default function LeaderboardModal({ isOpen, onClose, currentPin }) {
                   <div className="text-right">
                     <span className="text-sm font-black text-amber-400 flex items-center gap-1">
                       <Coins className="w-3.5 h-3.5 text-yellow-400" />
-                      {(sc.chips ?? 0).toLocaleString()}
+                      {sc.chips?.toLocaleString() || 0}
                     </span>
                     <span className="text-[10px] text-gray-500">Chips</span>
                   </div>

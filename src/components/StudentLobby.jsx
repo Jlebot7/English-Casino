@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, Users, Disc3, Dices, School, ArrowRight } from 'lucide-react';
+import { Sparkles, Trophy, Play, Users, Disc3, Dices, Gamepad2, Coins, School, ArrowRight, Flame } from 'lucide-react';
 import { sounds } from '../utils/soundEffects';
 
 export default function StudentLobby({
@@ -12,9 +12,12 @@ export default function StudentLobby({
   onSelectClassroom,
   students = [],
   activeStudent,
+  completedStudentIds = [],
   onOpenSpinner,
   onOpenRosterModal,
-  onOpenTeacherPortal
+  onOpenTeacherPortal,
+  onResetSessionRound,
+  onCloseDailySession
 }) {
   const currentClassroom = classrooms.find(c => c.id === activeClassroomId) || classrooms[0];
 
@@ -116,7 +119,7 @@ export default function StudentLobby({
             <div className="flex items-center justify-between mb-3">
               <span className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-300 uppercase tracking-widest bg-purple-950/80 px-2.5 py-0.5 rounded-full border border-purple-500/40">
                 <Dices className="w-3.5 h-3.5 text-yellow-300" />
-                Sorteo de Participantes
+                Sorteo Diario • {students.filter(s => !completedStudentIds.includes(s.id)).length} pendientes de {students.length}
               </span>
 
               {activeStudent && (
@@ -137,7 +140,7 @@ export default function StudentLobby({
                   </span>
                   <h3 className="text-xl font-black text-white">{activeStudent.name}</h3>
                   <p className="text-xs text-gray-400">
-                    Aciertos: {activeStudent.correctAnswers || 0} / {activeStudent.totalQuestions || 0}
+                    Aciertos: {activeStudent.correctAnswers || 0} / {activeStudent.totalQuestions || 0} • {completedStudentIds.includes(activeStudent.id) ? '✓ Ya jugó en esta sesión' : 'Pendiente de jugar'}
                   </p>
                 </div>
               </div>
@@ -149,16 +152,48 @@ export default function StudentLobby({
           </div>
 
           <div className="mt-4 pt-3 flex flex-wrap gap-2.5">
-            <button
-              onClick={() => {
-                sounds.playChips();
-                if (onOpenSpinner) onOpenSpinner();
-              }}
-              className="flex-1 py-3 px-4 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 text-white font-black text-sm rounded-2xl shadow-xl shadow-purple-950/60 transition transform hover:scale-[1.02] active:scale-95 cursor-pointer flex items-center justify-center gap-2"
-            >
-              <Disc3 className="w-4 h-4 text-yellow-300 animate-spin" />
-              <span>🎲 GIRAR RULETA DE ALUMNOS</span>
-            </button>
+            {students.length > 0 && students.filter(s => !completedStudentIds.includes(s.id)).length === 0 ? (
+              <div className="w-full space-y-2">
+                <div className="p-2.5 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-center text-xs font-bold text-emerald-300">
+                  🎉 ¡Todos los alumnos del salón ya han sido elegidos en la sesión de hoy!
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {onResetSessionRound && (
+                    <button
+                      onClick={() => {
+                        sounds.playChips();
+                        onResetSessionRound();
+                      }}
+                      className="flex-1 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white font-bold text-xs rounded-xl shadow transition cursor-pointer"
+                    >
+                      🔄 Iniciar Nueva Ronda
+                    </button>
+                  )}
+                  {onCloseDailySession && (
+                    <button
+                      onClick={() => {
+                        sounds.playTick();
+                        onCloseDailySession();
+                      }}
+                      className="flex-1 py-2.5 bg-gray-800 hover:bg-gray-700 text-amber-300 font-bold text-xs rounded-xl border border-gray-700 transition cursor-pointer"
+                    >
+                      📋 Cerrar Sesión del Día
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  sounds.playChips();
+                  if (onOpenSpinner) onOpenSpinner();
+                }}
+                className="flex-1 py-3 px-4 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 text-white font-black text-sm rounded-2xl shadow-xl shadow-purple-950/60 transition transform hover:scale-[1.02] active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Disc3 className="w-4 h-4 text-yellow-300 animate-spin" />
+                <span>🎲 GIRAR RULETA ({students.filter(s => !completedStudentIds.includes(s.id)).length} pendientes)</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

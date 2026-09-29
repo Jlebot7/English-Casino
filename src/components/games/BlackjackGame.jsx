@@ -56,7 +56,7 @@ function calculateHandScore(cards) {
 
 export default function BlackjackGame({
   activity,
-  chips = 1000,
+  chips,
   onUpdateChips,
   onBackToLobby,
   activeStudent,
@@ -307,7 +307,7 @@ export default function BlackjackGame({
         <div className="flex items-center gap-2">
           <div className="px-3 py-1.5 rounded-xl bg-black/60 border border-amber-500/40 text-amber-400 text-xs font-bold flex items-center gap-1.5">
             <Coins className="w-4 h-4 text-yellow-400" />
-            <span>{(chips ?? 0).toLocaleString()} Fichas</span>
+            <span>{chips.toLocaleString()} Fichas</span>
           </div>
         </div>
       </div>

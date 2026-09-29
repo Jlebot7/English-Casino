@@ -5,6 +5,7 @@ import { sounds } from '../utils/soundEffects';
 export default function ClassroomTurnBar({
   students = [],
   activeStudent,
+  completedStudentIds = [],
   onNextStudent,
   onOpenSpinner,
   onOpenRosterModal,
@@ -69,7 +70,7 @@ export default function ClassroomTurnBar({
         <div className="flex items-center gap-1.5 bg-black/60 border border-amber-500/40 px-3 py-1.5 rounded-xl shadow-inner mr-1">
           <Coins className="w-3.5 h-3.5 text-yellow-400" />
           <span className="text-xs font-black text-amber-300">
-            {(activeStudent?.chips ?? 1000).toLocaleString()} Fichas
+            {activeStudent?.chips?.toLocaleString() || 1000} Fichas
           </span>
         </div>
 
@@ -97,7 +98,9 @@ export default function ClassroomTurnBar({
             title="Abrir ruleta de la suerte para sortear estudiante"
           >
             <Disc3 className="w-4 h-4 text-yellow-300 animate-spin" />
-            <span className="hidden sm:inline">Ruleta Alumnos</span>
+            <span className="hidden sm:inline">
+              Ruleta ({students.filter(s => !completedStudentIds.includes(s.id)).length})
+            </span>
           </button>
         )}
 

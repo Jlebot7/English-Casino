@@ -264,7 +264,7 @@ export default function ClassroomRosterModal({
                     <div className="text-right">
                       <span className="text-sm font-black text-amber-400 flex items-center justify-end gap-1">
                         <Coins className="w-3.5 h-3.5 text-yellow-400" />
-                        {(student.chips ?? 1000).toLocaleString()}
+                        {student.chips?.toLocaleString() || 1000}
                       </span>
                       <span className="text-[10px] text-gray-500">Fichas</span>
                     </div>

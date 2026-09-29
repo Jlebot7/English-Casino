@@ -134,7 +134,10 @@ En la pestaña **"Sesión Diaria"**:
    * ➖ **Frases en Negativo**: El alumno debe formular una oración negativa con auxiliares.
    * ❓ **Formular Preguntas**: El alumno debe formular una pregunta (Wh- o Yes/No).
 4. **Registro en Vivo**: A medida que los alumnos juegan en el proyector, la tabla de turnos registra en vivo la hora, alumno, máquina jugada, si fue exonerado por suerte o si respondió el reto, aciertos y fichas.
-5. **Finalizar y Guardar Sesión**: Al concluir la clase, presiona **"Guardar y Cerrar Sesión en Historial"** para archivarla permanentemente.
+5. **Cierre de Sesión y Sesiones Nuevas Diarias**: 
+   * Al concluir la clase (o cuando el docente lo decida), presiona **"Cerrar Sesión del Día"**.
+   * Si quedan alumnos sin jugar, la app permite cerrar la sesión igualmente. **Los alumnos que queden no quedarán pendientes para el día siguiente: cada sesión diaria comienza 100% limpia y nueva con la lista completa del salón.**
+   * En caso de requerirlo, el docente también puede presionar **"Reiniciar Ronda"** para volver a habilitar a todos los alumnos en una segunda vuelta dentro de la misma clase.
 
 ### 📜 4.3 Historial Permanente de Sesiones
 En la pestaña **"Historial"**:
@@ -149,20 +152,26 @@ En la pestaña **"Historial"**:
 
 La aplicación está diseñada para ser proyectada en el aula (o smartboard) sin requerir que los estudiantes inicien sesión ni usen dispositivos móviles.
 
-### 🎲 5.1 Sorteo con la Ruleta de Alumnos
+### 🎲 5.1 Sorteo Diario y Ruleta Progresiva
 1. En la pantalla principal o durante el juego, presiona **`🎲 GIRAR RULETA DE ALUMNOS`**.
-2. La ruleta física girará con sonidos mecánicos y elegirá a un estudiante al azar con fanfarria de jackpot y confeti 🎉.
-3. El alumno seleccionado pasa al frente o elige sus variables de juego.
+2. **Eliminación Temporal en la Sesión**: A medida que los estudiantes son elegidos, **se retiran de la ruleta de ese día**, de modo que la ruleta va quedando más libre con cada turno hasta que todos hayan participado.
+3. Si la ruleta completa a todos los alumnos, se puede iniciar una nueva ronda con un clic o cerrar la sesión.
+4. El alumno seleccionado pasa al frente o elige sus variables de juego.
 
-### 🌟 5.2 Regla de Exoneración por Suerte ("Tener Suerte")
+### 🌟 5.2 Regla de Exoneración por Suerte en las Máquinas
 El alumno elige sus variables de casino y prueba su suerte:
 
-*  **Lucky Slots**: Elige su apuesta y tira de la palanca.
+* 🎰 **Lucky Slots**: Elige su apuesta y tira de la palanca.
   * **Si coinciden 2 o 3 rodillos**: **¡QUEDA EXONERADO!** Cobra sus fichas ganadas y **NO** responde ninguna pregunta.
   * **Si no coinciden**: Aparece el reto de inglés. Debe responder para salvar su turno.
-* 🎡 **Ruleta Vegas**: Elige su apuesta y predice el color (🔴 Rojo, ⚫ Negro o 🟡 Jackpot).
-  * **Si acierta**: **¡QUEDA EXONERADO!** Cobra el premio de la mesa sin responder preguntas.
-  * **Si no acierta**: Debe responder la pregunta de la categoría en que cayó la ruleta.
+* 🎡 **Ruleta Europea Clásica (Mecánica Real y Regla 2 de 3)**:
+  * Ruleta física real de 37 casillas (números 0 al 36 con casillas rojas, negras y verde 0).
+  * El estudiante configura sus predicciones según los **3 criterios típicos de la ruleta**:
+    1. **Color**: 🔴 Rojo vs ⚫ Negro.
+    2. **Paridad**: 🔢 Par (Even) vs 🔣 Impar (Odd).
+    3. **Rango**: 📉 1 - 18 (Bajo / Falta) vs 📈 19 - 36 (Alto / Pasa).
+  * **¡Regla de Exoneración!**: Si la bolilla acierta **al menos 2 de los 3 criterios (2/3 o 3/3)**: **¡QUEDA EXONERADO!** Cobra fichas y se libra de la pregunta pedagógica.
+  * Si solo acierta 1 o 0 de 3 (o cae en el 0 de la casa): Debe responder la pregunta pedagógica de inglés.
 * 🃏 **21 Blackjack**: Juega su mano contra el crupier (Hit / Stand).
   * **Si derrota a la casa o hace 21**: **¡QUEDA EXONERADO!** Cobra sus fichas y se salva del reto.
   * **Si pierde o se pasa**: Debe responder el reto pedagógico para salvar la ronda.

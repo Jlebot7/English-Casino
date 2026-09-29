@@ -61,7 +61,8 @@ function getInitialSession(classroomId, classroomName) {
     challengeType: 'random',
     customNotes: '',
     status: 'active',
-    turns: []
+    turns: [],
+    completedStudentIds: []
   };
 }
 
@@ -159,6 +160,25 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_SESSIONS_HISTORY_KEY, JSON.stringify(sessionsHistory));
   }, [sessionsHistory]);
+
+  // Ensure every calendar day begins with a completely fresh session (no leftover pending students)
+  useEffect(() => {
+    const todayStr = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+    if (activeSession?.date && activeSession.date !== todayStr) {
+      const hadActivity = (activeSession?.turns || []).length > 0 || (activeSession?.completedStudentIds || []).length > 0;
+      if (hadActivity) {
+        const archivedSession = {
+          ...activeSession,
+          status: 'finished',
+          finishedAt: Date.now()
+        };
+        setSessionsHistory(prev => [archivedSession, ...prev]);
+      }
+      const freshDay = getInitialSession(activeClassroom.id, activeClassroom.name);
+      freshDay.completedStudentIds = [];
+      setActiveSession(freshDay);
+    }
+  }, [activeClassroom.id, activeClassroom.name, activeSession]);
 
   // Turn Navigation
   const handleNextStudent = () => {
@@ -263,33 +283,63 @@ export default function App() {
       question: turnMeta.question || null
     };
 
-    setActiveSession(prev => ({
-      ...prev,
-      turns: [...(prev?.turns || []), newTurnLog]
-    }));
+    setActiveSession(prev => {
+      const existingCompleted = prev?.completedStudentIds || [];
+      const updatedCompleted = existingCompleted.includes(studentId)
+        ? existingCompleted
+        : [...existingCompleted, studentId];
+      return {
+        ...prev,
+        turns: [...(prev?.turns || []), newTurnLog],
+        completedStudentIds: updatedCompleted
+      };
+    });
   };
 
-  // Daily Session History Handlers
-  const handleSaveSessionToHistory = () => {
-    if (!activeSession || (activeSession.turns || []).length === 0) {
-      alert('La sesión actual no contiene turnos jugados para archivar.');
-      return;
+  // Close daily session & reset participation list for fresh next day
+  const handleCloseDailySession = () => {
+    const totalStudentsInClass = students.length;
+    const completedIds = activeSession?.completedStudentIds || [];
+    const participatedCount = completedIds.length;
+    const remainingCount = Math.max(0, totalStudentsInClass - participatedCount);
+    const hasActivity = (activeSession?.turns || []).length > 0 || participatedCount > 0;
+
+    const confirmMsg = remainingCount > 0
+      ? `¿Deseas cerrar la sesión diaria del salón "${activeClassroom?.name}"?\n\n• Participaron hoy: ${participatedCount} de ${totalStudentsInClass} alumnos\n• Quedaron sin participar: ${remainingCount} alumnos\n\nLos alumnos restantes NO quedarán pendientes: la próxima sesión diaria comenzará 100% limpia con todos los alumnos disponibles.`
+      : `¿Deseas cerrar y archivar la sesión diaria del salón "${activeClassroom?.name}"?`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    if (activeSession && hasActivity) {
+      const completedSession = {
+        ...activeSession,
+        status: 'finished',
+        finishedAt: Date.now(),
+        participatedCount,
+        remainingCount,
+        totalStudents: totalStudentsInClass
+      };
+      setSessionsHistory(prev => [completedSession, ...prev]);
     }
 
-    const completedSession = {
-      ...activeSession,
-      status: 'finished',
-      finishedAt: Date.now()
-    };
-
-    setSessionsHistory(prev => [completedSession, ...prev]);
-
-    // Start a fresh session for the active classroom
+    // Start a fresh session: completedStudentIds is empty [] so each session is brand new!
     const freshSession = getInitialSession(activeClassroom.id, activeClassroom.name);
-    freshSession.topic = activeSession.topic;
-    freshSession.level = activeSession.level;
-    freshSession.challengeType = activeSession.challengeType;
+    freshSession.topic = activeSession?.topic || 'Past Simple & Irregular Verbs';
+    freshSession.level = activeSession?.level || 'B1';
+    freshSession.challengeType = activeSession?.challengeType || 'random';
+    freshSession.completedStudentIds = [];
     setActiveSession(freshSession);
+
+    sounds.playJackpot();
+    alert('✅ Sesión diaria cerrada con éxito. La nueva sesión está limpia con todos los alumnos listos para participar.');
+  };
+
+  const handleResetSessionRound = () => {
+    setActiveSession(prev => ({
+      ...prev,
+      completedStudentIds: []
+    }));
+    sounds.playChips();
   };
 
   const handleDeleteSessionFromHistory = (sessionId) => {
@@ -377,6 +427,15 @@ export default function App() {
     if (idx !== -1) {
       setActiveStudentIndex(idx);
     }
+    // Mark as participated in today's session
+    setActiveSession(prev => {
+      const existing = prev?.completedStudentIds || [];
+      if (existing.includes(chosenStudent.id)) return prev;
+      return {
+        ...prev,
+        completedStudentIds: [...existing, chosenStudent.id]
+      };
+    });
   };
 
   // Game complete handler
@@ -427,9 +486,12 @@ export default function App() {
             onSelectClassroom={handleSelectClassroom}
             students={students}
             activeStudent={activeStudent}
+            completedStudentIds={activeSession?.completedStudentIds || []}
             onOpenSpinner={() => setIsSpinnerOpen(true)}
             onOpenRosterModal={() => setIsRosterModalOpen(true)}
             onOpenTeacherPortal={() => setCurrentView('teacher')}
+            onResetSessionRound={handleResetSessionRound}
+            onCloseDailySession={handleCloseDailySession}
           />
         )}
 
@@ -458,7 +520,9 @@ export default function App() {
             onUpdateStudents={handleUpdateStudents}
             activeSession={activeSession}
             onUpdateActiveSession={setActiveSession}
-            onSaveSessionToHistory={handleSaveSessionToHistory}
+            onSaveSessionToHistory={handleCloseDailySession}
+            onCloseDailySession={handleCloseDailySession}
+            onResetSessionRound={handleResetSessionRound}
             sessionsHistory={sessionsHistory}
             onDeleteSessionFromHistory={handleDeleteSessionFromHistory}
             onOpenRosterModal={() => setIsRosterModalOpen(true)}
@@ -471,6 +535,7 @@ export default function App() {
             <ClassroomTurnBar
               students={students}
               activeStudent={activeStudent}
+              completedStudentIds={activeSession?.completedStudentIds || []}
               onNextStudent={handleNextStudent}
               onRandomStudent={handleRandomStudent}
               onOpenSpinner={() => setIsSpinnerOpen(true)}
@@ -544,9 +609,12 @@ export default function App() {
         isOpen={isSpinnerOpen}
         onClose={() => setIsSpinnerOpen(false)}
         students={students}
+        completedStudentIds={activeSession?.completedStudentIds || []}
         activeClassroomName={activeClassroom?.name}
         onStudentSelected={handleStudentSelectedFromSpinner}
         onOpenRosterModal={() => setIsRosterModalOpen(true)}
+        onResetRound={handleResetSessionRound}
+        onCloseSession={handleCloseDailySession}
       />
 
       {/* Leaderboard Modal */}

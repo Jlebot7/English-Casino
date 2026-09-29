@@ -52,6 +52,8 @@ export default function TeacherPortal({
   activeSession,
   onUpdateActiveSession,
   onSaveSessionToHistory,
+  onCloseDailySession,
+  onResetSessionRound,
   sessionsHistory = [],
   onDeleteSessionFromHistory,
   onOpenRosterModal
@@ -459,21 +461,37 @@ export default function TeacherPortal({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {onResetSessionRound && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sounds.playChips();
+                      onResetSessionRound();
+                      alert('Ronda de sorteo reiniciada: todos los alumnos vuelven a estar disponibles en la ruleta.');
+                    }}
+                    className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold text-xs rounded-xl border border-gray-700 transition flex items-center gap-1.5 cursor-pointer"
+                    title="Reiniciar lista de alumnos participantes en la ruleta para una nueva ronda"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Reiniciar Ronda</span>
+                  </button>
+                )}
+
                 <button
+                  type="button"
                   onClick={() => {
-                    if (onSaveSessionToHistory) {
+                    if (onCloseDailySession) {
+                      onCloseDailySession();
+                    } else if (onSaveSessionToHistory) {
                       onSaveSessionToHistory();
-                      sounds.playJackpot();
-                      alert('¡Sesión guardada exitosamente en el Historial!');
                     }
                   }}
-                  disabled={sessionTurns.length === 0}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  title="Guardar el registro de turnos de hoy en el historial permanente"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer"
+                  title="Cerrar la sesión de hoy y archivarla. Los alumnos restantes no quedarán pendientes para mañana."
                 >
                   <Save className="w-4 h-4" />
-                  <span>Guardar y Cerrar Sesión en Historial</span>
+                  <span>Cerrar Sesión del Día</span>
                 </button>
               </div>
             </div>
@@ -619,6 +637,110 @@ export default function TeacherPortal({
               </div>
             )}
           </div>
+
+          {/* Daily Participation Tracker Card */}
+          {(() => {
+            const classStudents = currentClassroom.students || [];
+            const completedIds = activeSession?.completedStudentIds || [];
+            const completedList = classStudents.filter(s => completedIds.includes(s.id));
+            const pendingList = classStudents.filter(s => !completedIds.includes(s.id));
+            const pct = classStudents.length > 0 ? Math.round((completedList.length / classStudents.length) * 100) : 0;
+
+            return (
+              <div className="bg-gray-900/60 border border-gray-800 rounded-3xl p-6 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-black text-white flex items-center gap-2">
+                      <Users className="w-5 h-5 text-amber-400" />
+                      Participación del Salón en la Sesión ({completedList.length} / {classStudents.length})
+                    </h3>
+                    <p className="text-xs text-gray-400">
+                      A medida que los estudiantes juegan, se eliminan de la ruleta de sorteo para que vaya quedando más libre.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-amber-300 font-mono">
+                      {pct}% completado
+                    </span>
+                  </div>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="w-full bg-black/60 h-2.5 rounded-full overflow-hidden border border-gray-800">
+                  <div
+                    className="bg-gradient-to-r from-amber-500 to-emerald-400 h-full transition-all duration-500 rounded-full"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+
+                {/* Breakdown by status */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                  {/* Ya Jugaron */}
+                  <div className="p-3 bg-black/40 border border-emerald-500/20 rounded-2xl">
+                    <span className="text-xs font-bold text-emerald-400 block mb-2">
+                      ✓ Ya participaron hoy ({completedList.length}):
+                    </span>
+                    {completedList.length === 0 ? (
+                      <p className="text-xs text-gray-500">Ningún estudiante ha jugado aún en la sesión de hoy.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                        {completedList.map(s => (
+                          <span
+                            key={s.id}
+                            className="px-2.5 py-1 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-200 text-xs flex items-center gap-1"
+                          >
+                            <span>{s.avatar || '👤'}</span>
+                            <span>{s.name}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Pendientes */}
+                  <div className="p-3 bg-black/40 border border-purple-500/20 rounded-2xl">
+                    <span className="text-xs font-bold text-purple-300 block mb-2">
+                      🎲 Pendientes en la Ruleta ({pendingList.length}):
+                    </span>
+                    {pendingList.length === 0 ? (
+                      <p className="text-xs text-emerald-400 font-bold">¡Todos los alumnos del salón ya han sido sorteados!</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                        {pendingList.map(s => (
+                          <span
+                            key={s.id}
+                            className="px-2.5 py-1 rounded-xl bg-purple-950/40 border border-purple-500/30 text-purple-200 text-xs flex items-center gap-1"
+                          >
+                            <span>{s.avatar || '👤'}</span>
+                            <span>{s.name}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-gray-800/80 flex items-center justify-between text-[11px] text-gray-400">
+                  <span>
+                    💡 Si decides cerrar la sesión ahora, los alumnos pendientes no se arrastrarán al día siguiente: cada sesión será 100% nueva.
+                  </span>
+                  {onResetSessionRound && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sounds.playChips();
+                        onResetSessionRound();
+                      }}
+                      className="text-amber-400 hover:underline font-bold shrink-0 ml-2 cursor-pointer"
+                    >
+                      Reiniciar lista
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Real-time Session Live Stats & Logs */}
           <div className="bg-gray-900/60 border border-gray-800 rounded-3xl p-6 space-y-4">
