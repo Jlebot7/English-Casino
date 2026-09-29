@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import confetti from 'canvas-confetti';
-import { X, Dices, Sparkles, Users, Play, RotateCcw, CheckCircle2, Award, Calendar } from 'lucide-react';
+import { X, Dices, Sparkles, Users, Play, RotateCcw } from 'lucide-react';
 import { sounds } from '../utils/soundEffects';
 
 const WHEEL_COLORS = [
@@ -18,26 +18,18 @@ export default function StudentSpinnerModal({
   isOpen,
   onClose,
   students = [],
-  completedStudentIds = [],
   activeClassroomName = 'Salón Activo',
   onStudentSelected,
-  onOpenRosterModal,
-  onResetRound,
-  onCloseSession
+  onOpenRosterModal
 }) {
   const canvasRef = useRef(null);
   const [isSpinning, setIsSpinning] = useState(false);
   const [winner, setWinner] = useState(null);
-  const [showCompletedList, setShowCompletedList] = useState(false);
   const rotationRef = useRef(0);
   const lastSliceIdxRef = useRef(-1);
 
-  // Eligible students for the current daily session (excluding those who already participated)
-  const eligibleStudents = students.filter(s => !completedStudentIds.includes(s.id));
-  const numSlices = eligibleStudents.length;
+  const numSlices = students.length;
   const sliceAngle = numSlices > 0 ? (2 * Math.PI) / numSlices : 0;
-
-  const completedStudents = students.filter(s => completedStudentIds.includes(s.id));
 
   const drawWheel = useCallback((rotation) => {
     const canvas = canvasRef.current;
@@ -74,11 +66,11 @@ export default function StudentSpinnerModal({
     }
     ctx.restore();
 
-    // Slices for eligible students only (wheel gets freer as students participate)
+    // Slices
     for (let i = 0; i < numSlices; i++) {
       const startAngle = rotation + i * sliceAngle;
       const endAngle = startAngle + sliceAngle;
-      const student = eligibleStudents[i];
+      const student = students[i];
       const color = WHEEL_COLORS[i % WHEEL_COLORS.length];
 
       ctx.save();
@@ -127,18 +119,18 @@ export default function StudentSpinnerModal({
     ctx.font = '8px system-ui';
     ctx.fillText('STUDENT', centerX, centerY + 10);
     ctx.restore();
-  }, [eligibleStudents, numSlices, sliceAngle]);
+  }, [numSlices, sliceAngle, students]);
 
   useEffect(() => {
-    if (isOpen && numSlices > 0) {
+    if (isOpen) {
       drawWheel(0);
     }
-  }, [isOpen, numSlices, drawWheel]);
+  }, [isOpen, drawWheel]);
 
   if (!isOpen) return null;
 
   const handleSpin = () => {
-    if (isSpinning || eligibleStudents.length === 0) return;
+    if (isSpinning || students.length === 0) return;
 
     setIsSpinning(true);
     setWinner(null);
@@ -165,7 +157,7 @@ export default function StudentSpinnerModal({
         requestAnimationFrame(animate);
       } else {
         setIsSpinning(false);
-        const selectedStudent = eligibleStudents[currentSliceIdx];
+        const selectedStudent = students[currentSliceIdx];
         setWinner(selectedStudent);
         sounds.playJackpot();
         confetti({
@@ -199,60 +191,21 @@ export default function StudentSpinnerModal({
         </button>
 
         {/* Header */}
-        <div className="mb-3">
+        <div className="mb-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold uppercase tracking-wider mb-2">
             <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
-            Sorteo de Sesión Diaria
+            Sorteo de Participante
           </div>
           <h3 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-100">
             🎲 RULETA DE ALUMNOS
           </h3>
-          <p className="text-xs text-gray-400 mt-1">
-            {activeClassroomName} • <strong className="text-amber-400">{eligibleStudents.length} pendientes</strong> de {students.length}
+          <p className="text-xs text-gray-400">
+            {activeClassroomName} • {students.length} participantes en el salón
           </p>
         </div>
 
-        {/* Participation Stats & Pill */}
-        {students.length > 0 && (
-          <div className="w-full flex items-center justify-between text-[11px] px-3 py-1.5 bg-black/50 border border-gray-800 rounded-xl mb-2">
-            <span className="text-gray-400">
-              Participaron hoy: <strong className="text-emerald-400">{completedStudents.length}</strong> / {students.length}
-            </span>
-            {completedStudents.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowCompletedList(prev => !prev)}
-                className="text-amber-400 hover:underline font-bold"
-              >
-                {showCompletedList ? 'Ocultar lista' : 'Ver lista de hoy'}
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Completed list drawer */}
-        {showCompletedList && completedStudents.length > 0 && (
-          <div className="w-full max-h-24 overflow-y-auto bg-black/70 border border-gray-800 rounded-xl p-2 mb-2 text-left space-y-1">
-            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">
-              Alumnos que ya tuvieron su turno en esta sesión:
-            </span>
-            <div className="flex flex-wrap gap-1">
-              {completedStudents.map(cs => (
-                <span
-                  key={cs.id}
-                  className="px-2 py-0.5 rounded-lg bg-gray-800/80 border border-gray-700 text-gray-300 text-[11px] flex items-center gap-1"
-                >
-                  <span>{cs.avatar || '👤'}</span>
-                  <span>{cs.name}</span>
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Case 1: There are eligible students left */}
-        {eligibleStudents.length > 0 ? (
+        {/* Wheel Canvas Container */}
+        {students.length > 0 ? (
           <div className="relative my-2">
             {/* Top Pointer Indicator */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2 z-20 pointer-events-none drop-shadow-lg">
@@ -266,43 +219,7 @@ export default function StudentSpinnerModal({
               className="rounded-full shadow-2xl border-4 border-amber-500/40"
             />
           </div>
-        ) : students.length > 0 ? (
-          /* Case 2: All students have participated in the session! */
-          <div className="py-8 px-6 border-2 border-emerald-500/40 bg-emerald-950/20 rounded-3xl my-3 max-w-sm w-full animate-fadeIn">
-            <Award className="w-12 h-12 text-yellow-400 mx-auto mb-2" />
-            <h4 className="text-base font-black text-white">¡Todos los alumnos ya participaron hoy!</h4>
-            <p className="text-xs text-emerald-200/90 mt-1 mb-4 leading-relaxed">
-              Los {students.length} estudiantes del salón han jugado en la sesión diaria. La ruleta ha completado su ronda.
-            </p>
-            <div className="flex flex-col gap-2">
-              {onResetRound && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onResetRound();
-                    sounds.playChips();
-                  }}
-                  className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white font-bold text-xs rounded-xl shadow transition cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <RotateCcw className="w-4 h-4" /> Iniciar Nueva Ronda de Sorteo
-                </button>
-              )}
-              {onCloseSession && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    onCloseSession();
-                  }}
-                  className="w-full py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold text-xs rounded-xl border border-gray-700 transition cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <Calendar className="w-4 h-4 text-amber-400" /> Cerrar Sesión del Día
-                </button>
-              )}
-            </div>
-          </div>
         ) : (
-          /* Case 3: No students in classroom roster */
           <div className="py-12 px-6 border-2 border-dashed border-gray-800 rounded-3xl my-4 max-w-sm">
             <Users className="w-12 h-12 text-gray-600 mx-auto mb-2" />
             <p className="text-sm font-bold text-gray-300">No hay estudiantes en este salón</p>
@@ -330,13 +247,13 @@ export default function StudentSpinnerModal({
               <h4 className="text-2xl font-black text-white">{winner.name}</h4>
             </div>
             <p className="text-xs text-gray-300 mt-1">
-              ¡Es su turno de probar suerte en el casino o responder el reto!
+              ¡Es tu turno de probar suerte en el casino o responder el reto!
             </p>
           </div>
         )}
 
         {/* Action Buttons */}
-        {eligibleStudents.length > 0 && (
+        {students.length > 0 && (
           <div className="flex flex-wrap items-center justify-center gap-3 mt-3 w-full">
             {!winner ? (
               <button
