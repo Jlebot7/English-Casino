@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, Trophy, Play, Users, Disc3, Dices, Gamepad2, Coins, School, ArrowRight, Flame } from 'lucide-react';
+import { Sparkles, Users, Disc3, Dices, School, ArrowRight } from 'lucide-react';
 import { sounds } from '../utils/soundEffects';
 
 export default function StudentLobby({
@@ -17,7 +17,9 @@ export default function StudentLobby({
   onOpenRosterModal,
   onOpenTeacherPortal,
   onResetSessionRound,
-  onCloseDailySession
+  onCloseDailySession,
+  currentTeacher,
+  onOpenAuthModal
 }) {
   const currentClassroom = classrooms.find(c => c.id === activeClassroomId) || classrooms[0];
 
@@ -56,10 +58,18 @@ export default function StudentLobby({
                 <School className="w-4 h-4" /> Salón de Clases
               </span>
               <button
-                onClick={onOpenRosterModal}
-                className="text-xs text-amber-400 hover:underline font-bold"
+                onClick={() => {
+                  sounds.playTick();
+                  if (!currentTeacher && onOpenAuthModal) {
+                    onOpenAuthModal('gestionar los salones de clases', onOpenRosterModal);
+                  } else {
+                    onOpenRosterModal();
+                  }
+                }}
+                className="text-xs text-amber-400 hover:underline font-bold flex items-center gap-1"
               >
-                Gestionar Salones
+                <span>Gestionar Salones</span>
+                {!currentTeacher && <span className="text-[10px]">🔒</span>}
               </button>
             </div>
 
@@ -102,11 +112,19 @@ export default function StudentLobby({
 
           <div className="mt-4 pt-3 border-t border-gray-800 flex items-center justify-between">
             <button
-              onClick={onOpenRosterModal}
-              className="text-xs text-gray-300 hover:text-white font-semibold flex items-center gap-1"
+              onClick={() => {
+                sounds.playTick();
+                if (!currentTeacher && onOpenAuthModal) {
+                  onOpenAuthModal('ver y gestionar la lista de alumnos', onOpenRosterModal);
+                } else {
+                  onOpenRosterModal();
+                }
+              }}
+              className="text-xs text-gray-300 hover:text-white font-semibold flex items-center gap-1.5"
             >
               <Users className="w-3.5 h-3.5 text-amber-400" />
               <span>Ver lista de alumnos ({students.length})</span>
+              {!currentTeacher && <span className="text-[10px] text-amber-400">🔒</span>}
             </button>
           </div>
         </div>
@@ -173,11 +191,16 @@ export default function StudentLobby({
                     <button
                       onClick={() => {
                         sounds.playTick();
-                        onCloseDailySession();
+                        if (!currentTeacher && onOpenAuthModal) {
+                          onOpenAuthModal('cerrar y archivar la sesión diaria', onCloseDailySession);
+                        } else {
+                          onCloseDailySession();
+                        }
                       }}
-                      className="flex-1 py-2.5 bg-gray-800 hover:bg-gray-700 text-amber-300 font-bold text-xs rounded-xl border border-gray-700 transition cursor-pointer"
+                      className="flex-1 py-2.5 bg-gray-800 hover:bg-gray-700 text-amber-300 font-bold text-xs rounded-xl border border-gray-700 transition cursor-pointer flex items-center justify-center gap-1"
                     >
-                      📋 Cerrar Sesión del Día
+                      <span>📋 Cerrar Sesión del Día</span>
+                      {!currentTeacher && <span className="text-[10px]">🔒</span>}
                     </button>
                   )}
                 </div>
@@ -235,10 +258,18 @@ export default function StudentLobby({
           )}
 
           <button
-            onClick={onOpenTeacherPortal}
-            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 text-black font-bold text-xs rounded-xl shadow transition cursor-pointer"
+            onClick={() => {
+              sounds.playTick();
+              if (!currentTeacher && onOpenAuthModal) {
+                onOpenAuthModal('acceder al Panel Docente para configurar temas y preguntas', onOpenTeacherPortal);
+              } else {
+                onOpenTeacherPortal();
+              }
+            }}
+            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 text-black font-bold text-xs rounded-xl shadow transition cursor-pointer flex items-center gap-1.5"
           >
-            👨‍🏫 Panel Docente (IA Groq)
+            <span>👨‍🏫 Panel Docente (IA Groq)</span>
+            {!currentTeacher && <span className="text-xs">🔒</span>}
           </button>
         </div>
       </div>

@@ -7,6 +7,7 @@ import SettingsModal from './components/SettingsModal';
 import ClassroomRosterModal from './components/ClassroomRosterModal';
 import ClassroomTurnBar from './components/ClassroomTurnBar';
 import StudentSpinnerModal from './components/StudentSpinnerModal';
+import TeacherAuthModal from './components/TeacherAuthModal';
 import SlotsGame from './components/games/SlotsGame';
 import RouletteGame from './components/games/RouletteGame';
 import BlackjackGame from './components/games/BlackjackGame';
@@ -16,6 +17,7 @@ import {
   getAllActivities, 
   submitScore 
 } from './services/firebaseService';
+import { getCurrentTeacher, logoutTeacher } from './services/authService';
 import { generateSingleTurnQuestion } from './services/groqService';
 import { sounds } from './utils/soundEffects';
 
@@ -127,6 +129,40 @@ export default function App() {
   const [isSpinnerOpen, setIsSpinnerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+
+  // Teacher Authentication State
+  const [currentTeacher, setCurrentTeacher] = useState(() => getCurrentTeacher());
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authPromptReason, setAuthPromptReason] = useState('');
+  const [postAuthCallback, setPostAuthCallback] = useState(null);
+
+  const handleRequireTeacherAuth = (reason = 'realizar esta acción', callback = null) => {
+    if (currentTeacher) {
+      if (callback) callback();
+      return true;
+    }
+    setAuthPromptReason(reason);
+    setPostAuthCallback(() => callback);
+    setIsAuthModalOpen(true);
+    return false;
+  };
+
+  const handleTeacherLoginSuccess = (teacherUser) => {
+    setCurrentTeacher(teacherUser);
+    if (postAuthCallback) {
+      const cb = postAuthCallback;
+      setPostAuthCallback(null);
+      cb();
+    }
+  };
+
+  const handleTeacherLogout = async () => {
+    await logoutTeacher();
+    setCurrentTeacher(null);
+    if (currentView === 'teacher') {
+      setCurrentView('lobby');
+    }
+  };
 
   // Settings & Configuration
   const [groqApiKey, setGroqApiKey] = useState(() => {
@@ -467,10 +503,17 @@ export default function App() {
         chips={chips}
         isMuted={isMuted}
         onToggleMute={handleToggleMute}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={() => {
+          handleRequireTeacherAuth('modificar la configuración de API y base de datos', () => setIsSettingsOpen(true));
+        }}
         onOpenLeaderboard={() => setIsLeaderboardOpen(true)}
         studentsCount={students.length}
-        onOpenRosterModal={() => setIsRosterModalOpen(true)}
+        onOpenRosterModal={() => {
+          handleRequireTeacherAuth('gestionar salones y alumnos', () => setIsRosterModalOpen(true));
+        }}
+        currentTeacher={currentTeacher}
+        onOpenAuthModal={(reason, cb) => handleRequireTeacherAuth(reason, cb)}
+        onLogoutTeacher={handleTeacherLogout}
       />
 
       {/* Main View Area */}
@@ -488,45 +531,83 @@ export default function App() {
             activeStudent={activeStudent}
             completedStudentIds={activeSession?.completedStudentIds || []}
             onOpenSpinner={() => setIsSpinnerOpen(true)}
-            onOpenRosterModal={() => setIsRosterModalOpen(true)}
-            onOpenTeacherPortal={() => setCurrentView('teacher')}
+            onOpenRosterModal={() => {
+              handleRequireTeacherAuth('ver y gestionar la lista de alumnos', () => setIsRosterModalOpen(true));
+            }}
+            onOpenTeacherPortal={() => {
+              handleRequireTeacherAuth('acceder al Panel Docente', () => setCurrentView('teacher'));
+            }}
             onResetSessionRound={handleResetSessionRound}
-            onCloseDailySession={handleCloseDailySession}
+            onCloseDailySession={() => {
+              handleRequireTeacherAuth('cerrar y archivar la sesión diaria', handleCloseDailySession);
+            }}
+            currentTeacher={currentTeacher}
+            onOpenAuthModal={(reason, cb) => handleRequireTeacherAuth(reason, cb)}
           />
         )}
 
         {currentView === 'teacher' && (
-          <TeacherPortal
-            groqApiKey={groqApiKey}
-            activities={activities}
-            onActivitySaved={(saved) => {
-              loadAllActivities();
-              if (saved) setCurrentActivity(saved);
-            }}
-            onPlayActivity={(act) => {
-              setCurrentActivity(act);
-              if (act.gameType && ['slots', 'roulette', 'blackjack'].includes(act.gameType)) {
-                setActiveGameMachine(act.gameType);
-              }
-              setCurrentView('game');
-            }}
-            onOpenSettings={() => setIsSettingsOpen(true)}
-            classrooms={classrooms}
-            activeClassroomId={activeClassroomId}
-            onSelectClassroom={handleSelectClassroom}
-            onCreateClassroom={handleCreateClassroom}
-            onDeleteClassroom={handleDeleteClassroom}
-            students={students}
-            onUpdateStudents={handleUpdateStudents}
-            activeSession={activeSession}
-            onUpdateActiveSession={setActiveSession}
-            onSaveSessionToHistory={handleCloseDailySession}
-            onCloseDailySession={handleCloseDailySession}
-            onResetSessionRound={handleResetSessionRound}
-            sessionsHistory={sessionsHistory}
-            onDeleteSessionFromHistory={handleDeleteSessionFromHistory}
-            onOpenRosterModal={() => setIsRosterModalOpen(true)}
-          />
+          !currentTeacher ? (
+            <div className="max-w-md mx-auto my-16 p-8 bg-gradient-to-b from-gray-900 via-gray-950 to-black border-2 border-amber-500/60 rounded-3xl text-center shadow-2xl space-y-4 animate-fadeIn">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border-2 border-amber-500/50 mx-auto flex items-center justify-center text-3xl shadow-lg shadow-amber-500/20">
+                🔒
+              </div>
+              <h2 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-100">
+                Panel Docente Protegido
+              </h2>
+              <p className="text-xs text-gray-300 leading-relaxed">
+                El acceso a la configuración de salones, historial de sesiones pedagógicas y generación de preguntas IA requiere autenticación de docente registrado.
+              </p>
+              <div className="pt-2 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleRequireTeacherAuth('acceder al Panel Docente')}
+                  className="w-full py-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 text-black font-black text-xs uppercase tracking-wider rounded-xl shadow cursor-pointer transition transform hover:scale-[1.02]"
+                >
+                  🔑 Iniciar Sesión como Docente
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('lobby')}
+                  className="w-full py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold text-xs rounded-xl cursor-pointer transition"
+                >
+                  Volver al Lobby de Juegos
+                </button>
+              </div>
+            </div>
+          ) : (
+            <TeacherPortal
+              groqApiKey={groqApiKey}
+              activities={activities}
+              onActivitySaved={(saved) => {
+                loadAllActivities();
+                if (saved) setCurrentActivity(saved);
+              }}
+              onPlayActivity={(act) => {
+                setCurrentActivity(act);
+                if (act.gameType && ['slots', 'roulette', 'blackjack'].includes(act.gameType)) {
+                  setActiveGameMachine(act.gameType);
+                }
+                setCurrentView('game');
+              }}
+              onOpenSettings={() => setIsSettingsOpen(true)}
+              classrooms={classrooms}
+              activeClassroomId={activeClassroomId}
+              onSelectClassroom={handleSelectClassroom}
+              onCreateClassroom={handleCreateClassroom}
+              onDeleteClassroom={handleDeleteClassroom}
+              students={students}
+              onUpdateStudents={handleUpdateStudents}
+              activeSession={activeSession}
+              onUpdateActiveSession={setActiveSession}
+              onSaveSessionToHistory={handleCloseDailySession}
+              onCloseDailySession={handleCloseDailySession}
+              onResetSessionRound={handleResetSessionRound}
+              sessionsHistory={sessionsHistory}
+              onDeleteSessionFromHistory={handleDeleteSessionFromHistory}
+              onOpenRosterModal={() => setIsRosterModalOpen(true)}
+            />
+          )
         )}
 
         {currentView === 'game' && currentActivity && (
@@ -539,7 +620,9 @@ export default function App() {
               onNextStudent={handleNextStudent}
               onRandomStudent={handleRandomStudent}
               onOpenSpinner={() => setIsSpinnerOpen(true)}
-              onOpenRosterModal={() => setIsRosterModalOpen(true)}
+              onOpenRosterModal={() => {
+                handleRequireTeacherAuth('modificar la lista de estudiantes', () => setIsRosterModalOpen(true));
+              }}
               onGenerateTurnQuestion={handleGenerateTurnQuestion}
             />
 
@@ -612,9 +695,13 @@ export default function App() {
         completedStudentIds={activeSession?.completedStudentIds || []}
         activeClassroomName={activeClassroom?.name}
         onStudentSelected={handleStudentSelectedFromSpinner}
-        onOpenRosterModal={() => setIsRosterModalOpen(true)}
+        onOpenRosterModal={() => {
+          handleRequireTeacherAuth('modificar la lista de estudiantes', () => setIsRosterModalOpen(true));
+        }}
         onResetRound={handleResetSessionRound}
-        onCloseSession={handleCloseDailySession}
+        onCloseSession={() => {
+          handleRequireTeacherAuth('cerrar la sesión del día', handleCloseDailySession);
+        }}
       />
 
       {/* Leaderboard Modal */}
@@ -635,6 +722,17 @@ export default function App() {
         onChangeVolume={handleChangeVolume}
         isMuted={isMuted}
         onToggleMute={handleToggleMute}
+      />
+
+      {/* Teacher Authentication Modal */}
+      <TeacherAuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => {
+          setIsAuthModalOpen(false);
+          setPostAuthCallback(null);
+        }}
+        onLoginSuccess={handleTeacherLoginSuccess}
+        promptReason={authPromptReason}
       />
     </div>
   );

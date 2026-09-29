@@ -9,9 +9,10 @@ Bienvenido a la guía paso a paso para configurar y personalizar **Lucky English
 2. [Configuración de Groq API (Generador de Preguntas con IA)](#2-configuración-de-groq-api)
 3. [Ajustes de Sonido y Text-to-Speech (TTS)](#3-ajustes-de-sonido-y-text-to-speech-tts)
 4. [Gestión por Salones, Alumnos y Sesiones Diarias](#4-gestión-por-salones-alumnos-y-sesiones-diarias)
-5. [Dinámica de Aula: Ruleta de Selección y Regla de Exoneración por Suerte](#5-dinámica-de-aula-ruleta-de-selección-y-regla-de-exoneración-por-suerte)
-6. [Despliegue y Publicación en GitHub Pages](#6-despliegue-y-publicación-en-github-pages)
-7. [Preguntas Frecuentes y Solución de Problemas](#7-preguntas-frecuentes)
+5. [Autenticación y Seguridad del Docente (Protección de Datos)](#5-autenticación-y-seguridad-del-docente)
+6. [Dinámica de Aula: Ruleta de Selección y Regla de Exoneración por Suerte](#6-dinámica-de-aula-ruleta-de-selección-y-regla-de-exoneración-por-suerte)
+7. [Despliegue y Publicación en GitHub Pages](#7-despliegue-y-publicación-en-github-pages)
+8. [Preguntas Frecuentes y Solución de Problemas](#8-preguntas-frecuentes)
 
 ---
 
@@ -148,17 +149,45 @@ En la pestaña **"Historial"**:
 
 ---
 
-## 5. Dinámica de Aula: Ruleta de Selección y Regla de Exoneración por Suerte
+## 5. Autenticación y Seguridad del Docente (Protección de Datos)
+
+Para evitar que los alumnos manipulen las listas de estudiantes, alteren la configuración o borren historiales si interactúan con la pantalla o el proyector, la aplicación implementa un **muro de seguridad exclusivo para docentes**:
+
+### 🔒 5.1 Zonas Protegidas vs Zona Pública de Proyección
+* **Zona Pública (Para Alumnos)**: Proyección del lobby de juegos, girar la ruleta de selección de turno, apostar en Slots, Ruleta o Blackjack, responder preguntas y consultar el tablero de clasificación.
+* **Zona Protegida (Exclusiva para Docentes)**:
+  1. **Panel Docente**: Gestión de sesiones diarias, cambio de temas pedagógicos y revisión de historiales.
+  2. **Gestión de Salones y Alumnos**: Alta, edición, pegado desde Excel o eliminación de estudiantes.
+  3. **Ajustes del Sistema**: Clave de API de Groq, credenciales de Firebase y configuración de voz.
+  4. **Cierre de Sesión Diaria**: Archivar la jornada de clase.
+
+### 🔑 5.2 Inicio de Sesión y Registro de Docentes
+1. Haz clic en el botón superior **`[🔒 Acceso Docente]`** o pulsa cualquier botón protegido.
+2. Si es tu primera vez, ve a la pestaña **"Registrarse"**, escribe tu nombre, correo y contraseña (mínimo 6 caracteres).
+3. **Usuario Demo Rápido**:
+   * Correo: `docente@casino.edu`
+   * Contraseña: `docente123`
+   *(También puedes presionar el enlace "Rellenar con usuario demo" para ingresar en un segundo)*.
+4. **Sincronización Cloud / Local**:
+   * Si configuraste Firebase en Ajustes, el registro e inicio de sesión se realiza mediante **Firebase Authentication**.
+   * Si trabajas sin internet o sin Firebase, el sistema cuenta con autenticación local cifrada en el navegador.
+
+### 🚪 5.3 Cierre de Sesión Rápido al Terminar
+En la barra superior verás tu insignia de docente (`👨‍🏫 Nombre`). Al hacer clic en el botón rojo de salida `🚪`, tu sesión se cierra al instante y la pantalla vuelve automáticamente al modo alumno protegido.
+
+---
+
+## 6. Dinámica de Aula: Ruleta de Selección y Regla de Exoneración por Suerte
 
 La aplicación está diseñada para ser proyectada en el aula (o smartboard) sin requerir que los estudiantes inicien sesión ni usen dispositivos móviles.
 
-### 🎲 5.1 Sorteo Diario y Ruleta Progresiva
+### 🎲 6.1 Sorteo Diario y Ruleta Progresiva
 1. En la pantalla principal o durante el juego, presiona **`🎲 GIRAR RULETA DE ALUMNOS`**.
 2. **Eliminación Temporal en la Sesión**: A medida que los estudiantes son elegidos, **se retiran de la ruleta de ese día**, de modo que la ruleta va quedando más libre con cada turno hasta que todos hayan participado.
 3. Si la ruleta completa a todos los alumnos, se puede iniciar una nueva ronda con un clic o cerrar la sesión.
 4. El alumno seleccionado pasa al frente o elige sus variables de juego.
 
-### 🌟 5.2 Regla de Exoneración por Suerte en las Máquinas
+### 🌟 6.2 Regla de Exoneración por Suerte en las Máquinas
 El alumno elige sus variables de casino y prueba su suerte:
 
 * 🎰 **Lucky Slots**: Elige su apuesta y tira de la palanca.
@@ -176,10 +205,10 @@ El alumno elige sus variables de casino y prueba su suerte:
   * **Si derrota a la casa o hace 21**: **¡QUEDA EXONERADO!** Cobra sus fichas y se salva del reto.
   * **Si pierde o se pasa**: Debe responder el reto pedagógico para salvar la ronda.
 
-### ⚡ 5.3 Botón "Reto IA" en Cada Turno
+### ⚡ 6.3 Botón "Reto IA" en Cada Turno
 Tanto en la barra superior de turnos como dentro de cada juego (cuando el alumno tiene mala suerte), el docente dispone del botón **`⚡ Reto IA`** (o `⚡ Generar Otro Reto IA`). Al presionarlo, Groq genera instantáneamente una pregunta única y contextualizada al tema de la sesión activa.
 
-### 🗣️ 5.4 Evaluación Oral para el Docente
+### 🗣️ 6.4 Evaluación Oral para el Docente
 En retos orales (crear frases o completar):
 * Botón **`✅ Correcto (+Fichas)`**: Otorga el puntaje y celebra el acierto.
 * Botón **`❌ Incorrecto`**: Registra el fallo y muestra la retroalimentación.
@@ -187,18 +216,18 @@ En retos orales (crear frases o completar):
 
 ---
 
-## 6. Despliegue y Publicación en GitHub Pages
+## 7. Despliegue y Publicación en GitHub Pages
 
 Tu proyecto incluye un flujo automatizado en `.github/workflows/deploy.yml`.
 
-### Paso 6.1: Activar GitHub Actions en tu Repositorio
+### Paso 7.1: Activar GitHub Actions en tu Repositorio
 1. Entra a tu repositorio en GitHub: `https://github.com/TU_USUARIO/TU_REPOSITORIO`.
 2. Ve a la pestaña **Settings** (Ajustes).
 3. En la barra lateral izquierda, selecciona **Pages**.
 4. En **Build and deployment** > **Source**, selecciona:
    👉 **`GitHub Actions`**
 
-### Paso 6.2: Subir Cambios y Publicar
+### Paso 7.2: Subir Cambios y Publicar
 Desde la terminal en tu computadora:
 
 ```powershell
@@ -211,7 +240,7 @@ GitHub Actions compilará la aplicación y la publicará automáticamente en tu 
 
 ---
 
-## 7. Preguntas Frecuentes
+## 8. Preguntas Frecuentes
 
 ### ¿Necesitan los alumnos instalar algo o registrarse?
 **No.** La aplicación funciona en modo proyección en pantalla gigante o proyector. Todo el control lo gestiona el docente en el aula.
