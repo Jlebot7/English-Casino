@@ -1,25 +1,34 @@
 import React, { useState } from 'react';
-import { Users, Plus, Trash2, X, Trophy, Dices, RotateCcw, Check, Sparkles, Coins } from 'lucide-react';
+import { Users, Plus, Trash2, X, Trophy, Dices, RotateCcw, Sparkles, Coins, School, Edit2, Check } from 'lucide-react';
 import { sounds } from '../utils/soundEffects';
 
-const AVATARS = ['🎩', '👑', '🍀', '🦊', '🤖', '💎', '🎲', '🦁', '⭐', '🚀', '🎯', '🐯'];
+const AVATARS = ['🎩', '👑', '🍀', '🦊', '🤖', '💎', '🎲', '🦁', '⭐', '🚀', '🎯', '🐯', '⚡', '🌸', '🐬'];
 
 export default function ClassroomRosterModal({
   isOpen,
   onClose,
-  students,
+  classrooms = [],
+  activeClassroomId,
+  onSelectClassroom,
+  onCreateClassroom,
+  onDeleteClassroom,
+  students = [],
   onUpdateStudents,
   activeStudentIndex,
   onSelectActiveStudent,
-  onRandomStudent
+  onOpenSpinner
 }) {
   const [singleName, setSingleName] = useState('');
   const [bulkText, setBulkText] = useState('');
   const [showBulkInput, setShowBulkInput] = useState(false);
+  const [newClassroomName, setNewClassroomName] = useState('');
+  const [showAddClassroom, setShowAddClassroom] = useState(false);
 
   if (!isOpen) return null;
 
-  // Add single student
+  const currentClassroom = classrooms.find(c => c.id === activeClassroomId) || classrooms[0];
+
+  // Add single student to active classroom
   const handleAddSingle = (e) => {
     e.preventDefault();
     if (!singleName.trim()) return;
@@ -38,7 +47,7 @@ export default function ClassroomRosterModal({
     sounds.playChips();
   };
 
-  // Add bulk students from comma or newline separated list
+  // Add bulk students
   const handleAddBulk = () => {
     if (!bulkText.trim()) return;
 
@@ -71,9 +80,9 @@ export default function ClassroomRosterModal({
     sounds.playTick();
   };
 
-  // Reset all students' chips to 1000 and answers to 0
+  // Reset chips to 1000
   const handleResetScores = () => {
-    if (confirm('¿Reiniciar las fichas y puntajes de todos los estudiantes a 1,000?')) {
+    if (confirm('¿Reiniciar las fichas y estadísticas de todos los estudiantes de este salón a 1,000?')) {
       const reset = students.map(s => ({
         ...s,
         chips: 1000,
@@ -85,51 +94,126 @@ export default function ClassroomRosterModal({
     }
   };
 
-  // Clear entire list
-  const handleClearAll = () => {
-    if (confirm('¿Eliminar todos los estudiantes de la lista?')) {
-      onUpdateStudents([]);
-      sounds.playTick();
+  // Create new classroom
+  const handleCreateClassroomSubmit = (e) => {
+    e.preventDefault();
+    if (!newClassroomName.trim()) return;
+    if (onCreateClassroom) {
+      onCreateClassroom(newClassroomName.trim());
+      setNewClassroomName('');
+      setShowAddClassroom(false);
+      sounds.playChips();
     }
   };
 
-  // Sorted copy for ranking
-  const sortedStudents = [...students].sort((a, b) => b.chips - a.chips);
-
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
-      <div className="bg-gradient-to-b from-gray-900 via-gray-950 to-black border-2 border-amber-500/80 rounded-3xl p-6 max-w-2xl w-full shadow-2xl relative flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
+      <div className="bg-gradient-to-b from-gray-900 via-gray-950 to-black border-2 border-amber-500/80 rounded-3xl p-5 md:p-6 max-w-3xl w-full shadow-2xl relative flex flex-col max-h-[92vh]">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-lg transition"
+          className="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-lg transition cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Header */}
         <div className="flex items-center gap-3 mb-4">
-          <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400">
-            <Users className="w-5 h-5" />
+          <div className="p-2.5 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400">
+            <School className="w-6 h-6" />
           </div>
           <div>
             <h3 className="text-xl font-black text-white flex items-center gap-2">
-              Gestión de Estudiantes del Salón
-              <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-mono font-bold">
-                {students.length} alumnos
-              </span>
+              Gestión de Salones y Estudiantes
             </h3>
             <p className="text-xs text-gray-400">
-              Ingresa los nombres de tus alumnos para jugar por turnos en cualquiera de las 3 máquinas
+              Selecciona el salón de clases activo, agrega alumnos o sortea con la ruleta
             </p>
           </div>
         </div>
 
+        {/* Classroom Selector Pills */}
+        <div className="bg-black/50 p-3 rounded-2xl border border-gray-800 mb-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
+              <School className="w-3.5 h-3.5 text-amber-400" />
+              Elegir Salón de Clases:
+            </span>
+
+            <button
+              onClick={() => setShowAddClassroom(!showAddClassroom)}
+              className="text-xs text-amber-400 hover:underline font-bold flex items-center gap-1"
+            >
+              <Plus className="w-3.5 h-3.5" /> Nuevo Salón
+            </button>
+          </div>
+
+          {showAddClassroom && (
+            <form onSubmit={handleCreateClassroomSubmit} className="flex gap-2 pt-1 animate-fadeIn">
+              <input
+                type="text"
+                value={newClassroomName}
+                onChange={(e) => setNewClassroomName(e.target.value)}
+                placeholder="Nombre del salón (ej. 10-A Mañana, Inglés Básico 2)..."
+                className="flex-1 bg-gray-900 border border-amber-500/40 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none"
+              />
+              <button
+                type="submit"
+                className="px-3 py-1.5 bg-amber-500 text-black font-bold text-xs rounded-xl shadow hover:bg-amber-400 transition"
+              >
+                Crear
+              </button>
+            </form>
+          )}
+
+          <div className="flex flex-wrap gap-2 pt-1">
+            {classrooms.map((c) => {
+              const isSelected = c.id === activeClassroomId;
+              return (
+                <div key={c.id} className="flex items-center">
+                  <button
+                    onClick={() => {
+                      sounds.playTick();
+                      if (onSelectClassroom) onSelectClassroom(c.id);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                      isSelected
+                        ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/30 font-black'
+                        : 'bg-gray-800/80 hover:bg-gray-700 text-gray-300 border border-gray-700'
+                    }`}
+                  >
+                    <span>🏫 {c.name}</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                      isSelected ? 'bg-black/30 text-black' : 'bg-black/40 text-amber-400'
+                    }`}>
+                      {c.students?.length || 0}
+                    </span>
+                  </button>
+
+                  {classrooms.length > 1 && (
+                    <button
+                      onClick={() => {
+                        if (confirm(`¿Eliminar el salón "${c.name}" y todos sus alumnos?`)) {
+                          if (onDeleteClassroom) onDeleteClassroom(c.id);
+                        }
+                      }}
+                      className="ml-1 p-1 text-gray-600 hover:text-red-400 transition"
+                      title="Eliminar este salón"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Input Methods: Single Add vs Bulk Paste */}
-        <div className="bg-black/50 p-3.5 rounded-2xl border border-gray-800 mb-4 space-y-3">
+        <div className="bg-black/50 p-3.5 rounded-2xl border border-gray-800 mb-3 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-300">
-              {showBulkInput ? 'Pegar Lista de Estudiantes' : 'Agregar Estudiante'}
+              Alumnos de <strong className="text-amber-300">{currentClassroom?.name || 'Salón Activo'}</strong> ({students.length})
             </span>
             <button
               onClick={() => setShowBulkInput(!showBulkInput)}
@@ -160,8 +244,8 @@ export default function ClassroomRosterModal({
               <textarea
                 value={bulkText}
                 onChange={(e) => setBulkText(e.target.value)}
-                placeholder={`Pega aquí los nombres de tus estudiantes...\nEjemplo:\nCarlos Gómez\nAna Morales\nMateo Silva\nValentina Ríos`}
-                rows={4}
+                placeholder={`Pega aquí los nombres de tus estudiantes (uno por línea o separados por comas)...\nEjemplo:\nCarlos Gómez\nAna Morales\nMateo Silva\nValentina Ríos`}
+                rows={3}
                 className="w-full bg-gray-900 border border-gray-700 focus:border-amber-400 rounded-xl p-2.5 text-xs text-white focus:outline-none font-sans"
               />
               <div className="flex justify-end gap-2">
@@ -186,13 +270,16 @@ export default function ClassroomRosterModal({
 
         {/* Action Controls for Turn Picker */}
         {students.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-3 px-1">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2 px-1">
             <div className="flex items-center gap-2">
               <button
-                onClick={onRandomStudent}
-                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow transition"
+                onClick={() => {
+                  onClose();
+                  if (onOpenSpinner) onOpenSpinner();
+                }}
+                className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow transition cursor-pointer"
               >
-                <Dices className="w-3.5 h-3.5" /> Elegir Al Azar 🎲
+                <Dices className="w-3.5 h-3.5" /> 🎲 Sortear con Ruleta de Alumnos
               </button>
 
               <button
@@ -205,7 +292,11 @@ export default function ClassroomRosterModal({
             </div>
 
             <button
-              onClick={handleClearAll}
+              onClick={() => {
+                if (confirm(`¿Vaciar la lista de alumnos de ${currentClassroom?.name}?`)) {
+                  onUpdateStudents([]);
+                }
+              }}
               className="text-xs text-red-400 hover:text-red-300 font-semibold p-1"
             >
               Vaciar Lista
@@ -216,9 +307,9 @@ export default function ClassroomRosterModal({
         {/* Students Roster & Score List */}
         <div className="flex-1 overflow-y-auto space-y-2 pr-1">
           {students.length === 0 ? (
-            <div className="text-center py-10 border-2 border-dashed border-gray-800 rounded-2xl">
+            <div className="text-center py-8 border-2 border-dashed border-gray-800 rounded-2xl">
               <Users className="w-10 h-10 text-gray-600 mx-auto mb-2" />
-              <p className="text-gray-400 text-sm font-semibold">No hay estudiantes cargados aún.</p>
+              <p className="text-gray-300 text-sm font-semibold">No hay estudiantes en este salón aún.</p>
               <p className="text-xs text-gray-500 mt-1">
                 Escribe un nombre arriba o pega la lista de alumnos para comenzar el modo por turnos.
               </p>
@@ -235,9 +326,9 @@ export default function ClassroomRosterModal({
                   key={student.id || idx}
                   onClick={() => {
                     sounds.playTick();
-                    onSelectActiveStudent(idx);
+                    if (onSelectActiveStudent) onSelectActiveStudent(idx);
                   }}
-                  className={`flex items-center justify-between p-3 rounded-2xl border-2 transition cursor-pointer ${
+                  className={`flex items-center justify-between p-2.5 rounded-2xl border-2 transition cursor-pointer ${
                     isActive
                       ? 'bg-amber-500/20 border-amber-400 shadow-lg shadow-amber-500/20 scale-[1.01]'
                       : 'bg-gray-900/60 border-gray-800 hover:border-gray-700'
@@ -288,13 +379,13 @@ export default function ClassroomRosterModal({
         </div>
 
         {/* Footer */}
-        <div className="mt-4 pt-3 border-t border-gray-800 flex justify-between items-center">
+        <div className="mt-3 pt-3 border-t border-gray-800 flex justify-between items-center">
           <span className="text-[11px] text-gray-400">
             Haz clic en cualquier alumno para asignarle el turno de juego.
           </span>
           <button
             onClick={onClose}
-            className="px-5 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-bold rounded-xl text-xs shadow transition hover:scale-105"
+            className="px-5 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-bold rounded-xl text-xs shadow transition hover:scale-105 cursor-pointer"
           >
             Listo para Jugar
           </button>

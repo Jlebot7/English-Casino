@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
-import { ArrowLeft, Coins, Sparkles, Trophy, Hand, ShieldAlert, Award, User } from 'lucide-react';
+import { ArrowLeft, Coins, Sparkles, Trophy, Hand, Award, User, CheckCircle2, AlertCircle, Play, Plus, Shield } from 'lucide-react';
 import { sounds } from '../../utils/soundEffects';
 import QuestionCard from '../QuestionCard';
 
@@ -24,7 +24,6 @@ function createShuffledDeck() {
       });
     }
   }
-  // Shuffle
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [deck[i], deck[j]] = [deck[j], deck[i]];
@@ -67,24 +66,20 @@ export default function BlackjackGame({
 }) {
   const [deck, setDeck] = useState(createShuffledDeck());
   const [bet, setBet] = useState(100);
-  const [gameStage, setGameStage] = useState('betting'); // 'betting' | 'playing' | 'dealerTurn' | 'roundEnd'
+  const [gameStage, setGameStage] = useState('betting'); // 'betting' | 'playing' | 'roundEnd'
   const [playerHand, setPlayerHand] = useState([]);
   const [dealerHand, setDealerHand] = useState([]);
   const [hideDealerHole, setHideDealerHole] = useState(true);
 
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [awaitingHitQuestion, setAwaitingHitQuestion] = useState(false);
-  const [isDoubleDown, setIsDoubleDown] = useState(false);
-  const [roundResult, setRoundResult] = useState(null); // 'win' | 'lose' | 'push' | 'blackjack'
+  // Luck / Exoneration states
+  const [roundOutcome, setRoundOutcome] = useState(null); // 'lucky_exonerated' | 'unlucky_challenge' | 'push' | null
   const [resultMessage, setResultMessage] = useState('');
-
-  const [correctCount, setCorrectCount] = useState(0);
-  const [gameOver, setGameOver] = useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
 
   const questions = activity?.questions || [];
-  const currentQuestion = questions[currentQuestionIndex];
+  const currentQuestion = questions[currentQuestionIndex % (questions.length || 1)];
 
-  // Deal initial hands
+  // Start new hand: Deal initial 2 cards to each
   const startNewDeal = () => {
     if (chips < bet) {
       sounds.playWrong();
@@ -99,8 +94,7 @@ export default function BlackjackGame({
 
     sounds.playChips();
 
-    let currentDeck = deck.length < 15 ? createShuffledDeck() : [...deck];
-
+    let currentDeck = deck.length < 12 ? createShuffledDeck() : [...deck];
     const pCard1 = currentDeck.pop();
     const dCard1 = currentDeck.pop();
     const pCard2 = currentDeck.pop();
@@ -109,208 +103,145 @@ export default function BlackjackGame({
     setDeck(currentDeck);
     sounds.playCard();
 
-    setPlayerHand([pCard1, pCard2]);
-    setDealerHand([dCard1, dCard2]);
+    const initialPlayerCards = [pCard1, pCard2];
+    const initialDealerCards = [dCard1, dCard2];
+
+    setPlayerHand(initialPlayerCards);
+    setDealerHand(initialDealerCards);
     setHideDealerHole(true);
-    setRoundResult(null);
+    setRoundOutcome(null);
     setResultMessage('');
     setGameStage('playing');
 
-    // Check natural blackjack
-    const pScore = calculateHandScore([pCard1, pCard2]);
-    const dScore = calculateHandScore([dCard1, dCard2]);
-
+    // Natural 21 check
+    const pScore = calculateHandScore(initialPlayerCards);
     if (pScore === 21) {
-      setHideDealerHole(false);
-      setGameStage('roundEnd');
-      if (dScore === 21) {
-        setRoundResult('push');
-        setResultMessage('¡Empate! Ambos tienen Blackjack.');
-        onUpdateChips(bet);
-        if (onRecordStudentScore && activeStudent) {
-          onRecordStudentScore(activeStudent.id, bet, false, false);
-        }
-      } else {
-        setRoundResult('blackjack');
-        setResultMessage(`🔥 ¡BLACKJACK NATURAL! ${activeStudent ? activeStudent.name : 'Ganaste'} paga 3 a 2.`);
-        const winPayout = Math.round(bet * 2.5);
-        onUpdateChips(winPayout);
-        if (onRecordStudentScore && activeStudent) {
-          onRecordStudentScore(activeStudent.id, winPayout, true, false);
-        }
-        sounds.playJackpot();
-        confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
-      }
+      finalizeRound(initialPlayerCards, initialDealerCards, currentDeck, true);
     }
   };
 
-  // Player requests HIT: Must answer English question
-  const requestHit = () => {
-    if (gameStage !== 'playing' || awaitingHitQuestion) return;
-    setIsDoubleDown(false);
-    setAwaitingHitQuestion(true);
+  // Player hits
+  const handleHit = () => {
+    if (gameStage !== 'playing') return;
+
+    let currentDeck = deck.length < 5 ? createShuffledDeck() : [...deck];
+    const nextCard = currentDeck.pop();
+    const updatedPlayerHand = [...playerHand, nextCard];
+
+    setDeck(currentDeck);
+    setPlayerHand(updatedPlayerHand);
+    sounds.playCard();
+
+    const score = calculateHandScore(updatedPlayerHand);
+    if (score > 21) {
+      // Player busted!
+      finalizeRound(updatedPlayerHand, dealerHand, currentDeck, false);
+    } else if (score === 21) {
+      handleStand(updatedPlayerHand, currentDeck);
+    }
   };
 
-  // Player requests DOUBLE DOWN
-  const requestDoubleDown = () => {
-    if (gameStage !== 'playing' || playerHand.length !== 2 || awaitingHitQuestion) return;
-    if (chips < bet) {
+  // Player stands: Dealer plays
+  const handleStand = (customPlayerHand = null, customDeck = null) => {
+    if (gameStage !== 'playing') return;
+
+    const finalPlayerHand = customPlayerHand || playerHand;
+    let currentDeck = customDeck || (deck.length < 5 ? createShuffledDeck() : [...deck]);
+    let currentDealerHand = [...dealerHand];
+
+    setHideDealerHole(false);
+
+    // Dealer draws to 17
+    while (calculateHandScore(currentDealerHand) < 17) {
+      const card = currentDeck.pop();
+      currentDealerHand.push(card);
+    }
+
+    setDeck(currentDeck);
+    setDealerHand(currentDealerHand);
+    finalizeRound(finalPlayerHand, currentDealerHand, currentDeck, false);
+  };
+
+  const finalizeRound = (pHand, dHand, currentDeck, isNaturalBlackjack = false) => {
+    setHideDealerHole(false);
+    setGameStage('roundEnd');
+
+    const pScore = calculateHandScore(pHand);
+    const dScore = calculateHandScore(dHand);
+
+    if (pScore > 21) {
+      // Bust -> Unlucky!
+      setRoundOutcome('unlucky_challenge');
       sounds.playWrong();
-      alert('¡No hay suficientes fichas para doblar la apuesta!');
-      return;
+      setResultMessage(`💥 ¡Te pasaste de 21 (${pScore} puntos)! La casa gana la mano. ¡Debes responder el reto de inglés!`);
+    } else if (isNaturalBlackjack) {
+      // Natural 21 -> Lucky exonerated with 3:2 payout
+      const winPayout = Math.round(bet * 2.5);
+      onUpdateChips(winPayout);
+      if (onRecordStudentScore && activeStudent) {
+        onRecordStudentScore(activeStudent.id, winPayout, true, false);
+      }
+      setRoundOutcome('lucky_exonerated');
+      sounds.playJackpot();
+      confetti({ particleCount: 130, spread: 80, origin: { y: 0.6 } });
+      setResultMessage(`🔥 ¡BLACKJACK NATURAL (21)! ${activeStudent ? activeStudent.name : 'El estudiante'} derrota a la casa, queda exonerado y cobra +${winPayout} fichas.`);
+    } else if (dScore > 21 || pScore > dScore) {
+      // Player wins -> Lucky exonerated!
+      const winPayout = Math.round(bet * 2);
+      onUpdateChips(winPayout);
+      if (onRecordStudentScore && activeStudent) {
+        onRecordStudentScore(activeStudent.id, winPayout, true, false);
+      }
+      setRoundOutcome('lucky_exonerated');
+      sounds.playJackpot();
+      confetti({ particleCount: 110, spread: 70, origin: { y: 0.6 } });
+      setResultMessage(`🎉 ¡VICTORIA EN EL 21! ${pScore} vs ${dScore > 21 ? 'Crupier se pasó' : `${dScore} del Crupier`}. ¡${activeStudent ? activeStudent.name : 'El estudiante'} queda exonerado de la pregunta y cobra +${winPayout} fichas!`);
+    } else if (pScore === dScore) {
+      // Push -> Bet returned
+      onUpdateChips(bet);
+      if (onRecordStudentScore && activeStudent) {
+        onRecordStudentScore(activeStudent.id, bet, false, false);
+      }
+      setRoundOutcome('push');
+      sounds.playChips();
+      setResultMessage(`🤝 ¡Empate (${pScore} a ${dScore})! La casa devuelve las fichas.`);
+    } else {
+      // Dealer wins -> Unlucky!
+      setRoundOutcome('unlucky_challenge');
+      sounds.playWrong();
+      setResultMessage(`⚠️ El Crupier ganó (${dScore} vs tus ${pScore}). ¡Debes superar el reto de inglés para salvar tu ronda!`);
     }
-
-    onUpdateChips(-bet);
-    if (onRecordStudentScore && activeStudent) {
-      onRecordStudentScore(activeStudent.id, -bet, false, false);
-    }
-    setBet(prev => prev * 2);
-    setIsDoubleDown(true);
-    setAwaitingHitQuestion(true);
   };
 
-  // Handle question answer for HIT / DOUBLE
-  const handleQuestionAnswer = (isCorrect) => {
-    setAwaitingHitQuestion(false);
-
+  const handleQuestionAnswer = (isCorrect, selected, q) => {
     if (isCorrect) {
-      setCorrectCount(prev => prev + 1);
-      sounds.playCard();
-
+      const reward = (q?.points || 200) + bet;
+      onUpdateChips(reward);
       if (onRecordStudentScore && activeStudent) {
-        onRecordStudentScore(activeStudent.id, 0, true, true);
+        onRecordStudentScore(activeStudent.id, reward, true, true);
       }
-
-      let currentDeck = [...deck];
-      if (currentDeck.length === 0) currentDeck = createShuffledDeck();
-      const newCard = currentDeck.pop();
-      setDeck(currentDeck);
-
-      const newHand = [...playerHand, newCard];
-      setPlayerHand(newHand);
-
-      const score = calculateHandScore(newHand);
-
-      if (score > 21) {
-        // Bust!
-        sounds.playWrong();
-        setHideDealerHole(false);
-        setGameStage('roundEnd');
-        setRoundResult('lose');
-        setResultMessage(`¡Te pasaste con ${score}! La casa gana.`);
-        advanceQuestionOrFinish();
-      } else if (score === 21 || isDoubleDown) {
-        // Automatically stand
-        standTurn(newHand);
-      }
+      sounds.playCorrect();
+      confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+      setResultMessage(`🎯 ¡Reto superado! ${activeStudent ? activeStudent.name : 'Respuesta correcta'}. Salvaste tu turno y ganaste +${reward} fichas.`);
     } else {
       sounds.playWrong();
       if (onRecordStudentScore && activeStudent) {
         onRecordStudentScore(activeStudent.id, 0, false, true);
       }
-      setResultMessage('¡Respuesta incorrecta! No se concede carta este turno.');
-      standTurn(playerHand);
-    }
-  };
-
-  // Player STANDS: Dealer plays
-  const standTurn = (handToEvaluate = playerHand) => {
-    setGameStage('dealerTurn');
-    setHideDealerHole(false);
-    sounds.playCard();
-
-    const pScore = calculateHandScore(handToEvaluate);
-    let curDealerHand = [...dealerHand];
-    let curDeck = [...deck];
-
-    // Dealer hits on soft 16, stands on 17+
-    const dealerPlayLoop = () => {
-      let dScore = calculateHandScore(curDealerHand);
-
-      if (dScore < 17) {
-        if (curDeck.length === 0) curDeck = createShuffledDeck();
-        const nextCard = curDeck.pop();
-        curDealerHand.push(nextCard);
-        sounds.playCard();
-        setDealerHand([...curDealerHand]);
-        setTimeout(dealerPlayLoop, 600);
-      } else {
-        setDeck(curDeck);
-        evaluateFinalWinner(pScore, dScore);
-      }
-    };
-
-    setTimeout(dealerPlayLoop, 600);
-  };
-
-  const evaluateFinalWinner = (pScore, dScore) => {
-    setGameStage('roundEnd');
-
-    if (dScore > 21) {
-      // Dealer busts
-      setRoundResult('win');
-      setResultMessage(`¡El Crupier se pasó con ${dScore}! ¡${activeStudent ? activeStudent.name : 'Ganaste'}!`);
-      sounds.playJackpot();
-      confetti({ particleCount: 90, spread: 60 });
-      onUpdateChips(bet * 2);
-      if (onRecordStudentScore && activeStudent) {
-        onRecordStudentScore(activeStudent.id, bet * 2, true, false);
-      }
-    } else if (pScore > dScore) {
-      setRoundResult('win');
-      setResultMessage(`¡${activeStudent ? activeStudent.name : 'Ganaste'}! ${pScore} vence al ${dScore} del Crupier.`);
-      sounds.playCoin();
-      onUpdateChips(bet * 2);
-      if (onRecordStudentScore && activeStudent) {
-        onRecordStudentScore(activeStudent.id, bet * 2, true, false);
-      }
-    } else if (pScore === dScore) {
-      setRoundResult('push');
-      setResultMessage(`¡Empate a ${pScore}! Apuesta devuelta.`);
-      onUpdateChips(bet);
-      if (onRecordStudentScore && activeStudent) {
-        onRecordStudentScore(activeStudent.id, bet, false, false);
-      }
-    } else {
-      setRoundResult('lose');
-      setResultMessage(`El Crupier gana con ${dScore} sobre tus ${pScore}.`);
-      sounds.playWrong();
-      if (onRecordStudentScore && activeStudent) {
-        onRecordStudentScore(activeStudent.id, 0, false, false);
-      }
+      setResultMessage('❌ Respuesta incorrecta. ¡Sigue practicando!');
     }
 
-    advanceQuestionOrFinish();
+    setCurrentQuestionIndex(prev => (prev + 1) % (questions.length || 1));
   };
 
-  const advanceQuestionOrFinish = () => {
+  const handleNextTurn = () => {
+    setGameStage('betting');
+    setRoundOutcome(null);
+    setResultMessage('');
+    setPlayerHand([]);
+    setDealerHand([]);
     if (onAdvanceStudentTurn) {
-      setTimeout(() => {
-        onAdvanceStudentTurn();
-      }, 3000);
-    }
-
-    if (currentQuestionIndex + 1 >= questions.length) {
-      setTimeout(() => {
-        setGameOver(true);
-        if (onFinishGame) {
-          onFinishGame({
-            gameId: 'blackjack',
-            correctAnswers: correctCount,
-            totalQuestions: questions.length,
-            finalChips: chips
-          });
-        }
-      }, 3000);
-    } else {
-      setTimeout(() => {
-        setCurrentQuestionIndex(prev => prev + 1);
-        setGameStage('betting');
-        setPlayerHand([]);
-        setDealerHand([]);
-        setRoundResult(null);
-        setResultMessage('');
-      }, 4000);
+      onAdvanceStudentTurn();
     }
   };
 
@@ -320,239 +251,252 @@ export default function BlackjackGame({
     : calculateHandScore(dealerHand);
 
   return (
-    <div className="max-w-4xl mx-auto p-4 flex flex-col items-center">
+    <div className="max-w-4xl mx-auto p-4 animate-fadeIn space-y-6">
       {/* Top Header Navigation */}
-      <div className="w-full flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between">
         <button
           onClick={onBackToLobby}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs font-semibold border border-gray-700 transition"
+          className="px-3.5 py-2 rounded-xl bg-gray-900 border border-gray-800 hover:border-amber-500/40 text-xs font-bold text-gray-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
         >
-          <ArrowLeft className="w-4 h-4" /> Salir al Lobby
+          <ArrowLeft className="w-4 h-4" /> Sala Principal
         </button>
 
-        <div className="flex items-center gap-3">
-          {activeStudent && (
-            <div className="flex items-center gap-2 bg-amber-500/20 border border-amber-400 px-3 py-1 rounded-xl text-xs font-bold text-amber-300 animate-pulse">
-              <span>{activeStudent.avatar}</span>
-              <span>Turno: {activeStudent.name}</span>
-            </div>
-          )}
+        <div className="text-center">
+          <h2 className="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-100 uppercase tracking-wider">
+            🃏 21 Blackjack Casino
+          </h2>
+          <p className="text-xs text-gray-400">
+            Regla: ¡Derrota al crupier para exonerarte del reto! Si pierdes la mano, ¡a responder!
+          </p>
+        </div>
 
-          <div className="flex items-center gap-2 bg-gradient-to-r from-amber-600/30 to-yellow-600/30 border border-amber-500/40 px-4 py-1.5 rounded-xl shadow-lg">
-            <Coins className="w-4 h-4 text-amber-400" />
-            <span className="text-sm font-black text-amber-300">{chips.toLocaleString()} Fichas</span>
+        <div className="flex items-center gap-2">
+          <div className="px-3 py-1.5 rounded-xl bg-black/60 border border-amber-500/40 text-amber-400 text-xs font-bold flex items-center gap-1.5">
+            <Coins className="w-4 h-4 text-yellow-400" />
+            <span>{chips.toLocaleString()} Fichas</span>
           </div>
         </div>
       </div>
 
-      {/* Blackjack Table (Green Felt Style) */}
-      <div className="w-full max-w-2xl bg-gradient-to-b from-emerald-900 via-emerald-950 to-green-950 border-4 border-amber-500/80 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-        {/* Table Felt Inscription */}
-        <div className="text-center mb-6 border-b border-emerald-700/50 pb-3">
-          <h2 className="text-2xl font-black text-yellow-300 uppercase tracking-widest drop-shadow-md">
-            🃏 21 BLACKJACK LINGUA
-          </h2>
-          <p className="text-[11px] text-emerald-200/80 uppercase tracking-wider font-semibold">
-            {activeStudent ? `Mano de: ${activeStudent.name} ${activeStudent.avatar} • Responde preguntas para pedir carta` : 'Blackjack Paga 3 a 2 • Responde preguntas para pedir carta'}
-          </p>
-        </div>
+      {/* Active Student Turn Badge */}
+      {activeStudent && (
+        <div className="p-3 bg-gradient-to-r from-purple-950/60 via-indigo-950/60 to-purple-950/60 border-2 border-purple-500/50 rounded-2xl flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">{activeStudent.avatar || '🎩'}</span>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-purple-300 tracking-wider">Turno en Blackjack:</span>
+              <h4 className="text-base font-black text-white">{activeStudent.name}</h4>
+            </div>
+          </div>
 
-        {/* Dealer Zone */}
-        <div className="flex flex-col items-center mb-6">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-bold text-emerald-200 uppercase tracking-wider">Mano del Crupier</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-amber-300 font-bold bg-black/40 px-2.5 py-1 rounded-xl border border-amber-500/20">
+              💰 {activeStudent.chips || 1000} Fichas Alumno
+            </span>
+            {onAdvanceStudentTurn && (
+              <button
+                onClick={onAdvanceStudentTurn}
+                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-xs text-gray-300 font-bold rounded-xl border border-gray-700 transition cursor-pointer"
+              >
+                Cambiar Turno ↻
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Green Felt Table */}
+      <div className="bg-gradient-to-b from-emerald-950 via-green-950 to-gray-950 border-4 border-amber-500 rounded-3xl p-6 shadow-2xl relative text-center">
+        {/* Dealer Area */}
+        <div className="mb-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/50 border border-emerald-500/40 text-emerald-300 text-xs font-bold uppercase mb-3">
+            <span>🤵 Crupier (Casa)</span>
             {dealerHand.length > 0 && (
-              <span className="px-2 py-0.5 rounded-md bg-black/50 text-yellow-300 text-xs font-extrabold border border-yellow-500/30">
-                {hideDealerHole ? `${dealerScore} + ?` : dealerScore}
+              <span className="text-white font-mono font-bold bg-emerald-900/80 px-2 py-0.5 rounded-full">
+                {hideDealerHole ? `Muestra ${dealerScore}` : `Total: ${dealerScore}`}
               </span>
             )}
           </div>
 
-          <div className="flex gap-3 min-h-[96px] items-center justify-center">
-            {dealerHand.map((card, idx) => {
-              if (idx === 1 && hideDealerHole) {
+          <div className="flex justify-center gap-3 min-h-[110px] items-center">
+            {dealerHand.length === 0 ? (
+              <div className="text-xs text-emerald-300/60 font-semibold italic">Esperando apuesta para repartir cartas...</div>
+            ) : (
+              dealerHand.map((card, idx) => {
+                if (idx === 1 && hideDealerHole) {
+                  return (
+                    <div
+                      key={idx}
+                      className="w-16 h-24 md:w-20 md:h-28 rounded-xl bg-gradient-to-br from-blue-900 to-indigo-950 border-2 border-amber-400 shadow-xl flex items-center justify-center text-amber-300 font-bold text-xs select-none"
+                    >
+                      🂠 VEGAS
+                    </div>
+                  );
+                }
+
                 return (
                   <div
                     key={idx}
-                    className="w-16 h-24 bg-gradient-to-br from-blue-900 to-indigo-950 border-2 border-yellow-400 rounded-lg shadow-lg flex items-center justify-center text-yellow-400 text-xl font-bold"
+                    className="w-16 h-24 md:w-20 md:h-28 rounded-xl bg-white border-2 border-gray-300 shadow-xl flex flex-col justify-between p-2 select-none animate-fadeIn"
                   >
-                    🎲
+                    <span className={`text-sm md:text-base font-black ${card.color}`}>{card.value}</span>
+                    <span className={`text-2xl md:text-3xl text-center ${card.color}`}>{card.suit}</span>
+                    <span className={`text-sm md:text-base font-black text-right ${card.color}`}>{card.value}</span>
                   </div>
                 );
-              }
-              return (
-                <div
-                  key={idx}
-                  className="w-16 h-24 bg-white rounded-lg border-2 border-gray-300 shadow-xl flex flex-col justify-between p-1.5 select-none animate-fadeIn"
-                >
-                  <div className={`text-xs font-bold leading-none ${card.color}`}>
-                    {card.value}
-                    <div className="text-[10px]">{card.suit}</div>
-                  </div>
-                  <div className={`text-2xl text-center font-bold ${card.color}`}>{card.suit}</div>
-                  <div className={`text-xs font-bold leading-none self-end rotate-180 ${card.color}`}>
-                    {card.value}
-                    <div className="text-[10px]">{card.suit}</div>
-                  </div>
-                </div>
-              );
-            })}
+              })
+            )}
           </div>
         </div>
 
-        {/* Center Table Message */}
-        {resultMessage && (
-          <div className="text-center py-2 px-4 rounded-xl bg-black/70 border border-yellow-400 text-yellow-300 font-bold text-sm mb-4 animate-bounce">
-            {resultMessage}
-          </div>
-        )}
-
-        {/* Player Zone */}
-        <div className="flex flex-col items-center mb-6">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-bold text-emerald-200 uppercase tracking-wider">
-              {activeStudent ? `Mano de ${activeStudent.name}` : 'Tu Mano'}
-            </span>
+        {/* Player Area */}
+        <div className="pt-4 border-t border-emerald-800/60">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/50 border border-amber-500/40 text-amber-300 text-xs font-bold uppercase mb-3">
+            <span>👤 Mano del Alumno</span>
             {playerHand.length > 0 && (
-              <span className={`px-2 py-0.5 rounded-md bg-black/50 text-xs font-extrabold border ${
-                playerScore > 21 ? 'text-red-400 border-red-500' : 'text-yellow-300 border-yellow-500/30'
-              }`}>
-                {playerScore}
+              <span className="text-black font-mono font-black bg-amber-400 px-2 py-0.5 rounded-full">
+                Puntos: {playerScore}
               </span>
             )}
           </div>
 
-          <div className="flex gap-3 min-h-[96px] items-center justify-center">
-            {playerHand.map((card, idx) => (
-              <div
-                key={idx}
-                className="w-16 h-24 bg-white rounded-lg border-2 border-gray-300 shadow-xl flex flex-col justify-between p-1.5 select-none animate-fadeIn"
-              >
-                <div className={`text-xs font-bold leading-none ${card.color}`}>
-                  {card.value}
-                  <div className="text-[10px]">{card.suit}</div>
+          <div className="flex justify-center gap-3 min-h-[110px] items-center">
+            {playerHand.length === 0 ? (
+              <div className="text-xs text-emerald-300/60 font-semibold italic">Presiona "Repartir Mano" para comenzar</div>
+            ) : (
+              playerHand.map((card, idx) => (
+                <div
+                  key={idx}
+                  className="w-16 h-24 md:w-20 md:h-28 rounded-xl bg-white border-2 border-gray-300 shadow-xl flex flex-col justify-between p-2 select-none animate-fadeIn"
+                >
+                  <span className={`text-sm md:text-base font-black ${card.color}`}>{card.value}</span>
+                  <span className={`text-2xl md:text-3xl text-center ${card.color}`}>{card.suit}</span>
+                  <span className={`text-sm md:text-base font-black text-right ${card.color}`}>{card.value}</span>
                 </div>
-                <div className={`text-2xl text-center font-bold ${card.color}`}>{card.suit}</div>
-                <div className={`text-xs font-bold leading-none self-end rotate-180 ${card.color}`}>
-                  {card.value}
-                  <div className="text-[10px]">{card.suit}</div>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="bg-black/60 p-4 rounded-2xl border border-emerald-600/40 flex flex-wrap items-center justify-between gap-4">
+        {/* Result Message Banner */}
+        {resultMessage && (
+          <div className={`max-w-xl mx-auto my-4 p-3.5 rounded-2xl border text-xs md:text-sm font-bold flex items-center justify-center gap-2 animate-fadeIn ${
+            roundOutcome === 'lucky_exonerated'
+              ? 'bg-emerald-950/90 border-emerald-500 text-emerald-200 shadow-lg shadow-emerald-950/40'
+              : roundOutcome === 'push'
+              ? 'bg-blue-950/90 border-blue-500 text-blue-200'
+              : 'bg-amber-950/90 border-amber-500 text-amber-200'
+          }`}>
+            {roundOutcome === 'lucky_exonerated' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+            )}
+            <span>{resultMessage}</span>
+          </div>
+        )}
+
+        {/* Action Controls & Betting Bar */}
+        <div className="max-w-lg mx-auto mt-4 pt-3 border-t border-emerald-800/60 flex flex-wrap items-center justify-between gap-3">
           {gameStage === 'betting' && (
             <>
-              <div>
-                <label className="block text-[11px] text-emerald-300 uppercase font-bold mb-1">
-                  Elegir Apuesta
-                </label>
-                <div className="flex items-center gap-1.5">
-                  {[50, 100, 200, 500].map((amount) => (
-                    <button
-                      key={amount}
-                      onClick={() => {
-                        sounds.playChips();
-                        setBet(amount);
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
-                        bet === amount
-                          ? 'bg-amber-500 text-black border-amber-400'
-                          : 'bg-emerald-950 text-emerald-200 border-emerald-700 hover:border-amber-400'
-                      }`}
-                    >
-                      {amount}
-                    </button>
-                  ))}
-                </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-gray-300">Apuesta:</span>
+                {[50, 100, 200].map((amount) => (
+                  <button
+                    key={amount}
+                    onClick={() => {
+                      sounds.playChips();
+                      setBet(amount);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      bet === amount
+                        ? 'bg-amber-500 text-black shadow font-black scale-105'
+                        : 'bg-black/60 text-gray-300 hover:bg-gray-800 border border-gray-700'
+                    }`}
+                  >
+                    {amount}
+                  </button>
+                ))}
               </div>
 
               <button
                 onClick={startNewDeal}
-                className="px-8 py-3 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-gray-950 font-black text-sm uppercase rounded-xl shadow-lg shadow-amber-500/30 hover:scale-105 active:scale-95 transition cursor-pointer"
+                className="px-6 py-2.5 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 text-gray-950 font-black text-sm rounded-2xl shadow-xl shadow-amber-500/30 transition transform hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-2"
               >
-                Repartir Cartas
+                <span>🃏 ¡REPARTIR MANO!</span>
               </button>
             </>
           )}
 
           {gameStage === 'playing' && (
-            <div className="w-full flex items-center justify-center gap-4">
+            <div className="flex items-center justify-center gap-4 w-full">
               <button
-                onClick={requestHit}
-                disabled={awaitingHitQuestion}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-sm shadow-md transition transform hover:scale-105 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                onClick={handleHit}
+                className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 text-white font-black text-sm rounded-2xl shadow-lg transition transform hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center gap-2"
               >
-                <Sparkles className="w-4 h-4" /> PEDIR CARTA (Responder)
+                <Plus className="w-4 h-4" />
+                <span>PEDIR CARTA (Hit)</span>
               </button>
 
               <button
-                onClick={() => standTurn()}
-                disabled={awaitingHitQuestion}
-                className="px-6 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-sm shadow-md transition transform hover:scale-105 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                onClick={() => handleStand()}
+                className="flex-1 py-3 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 text-black font-black text-sm rounded-2xl shadow-lg transition transform hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center gap-2"
               >
-                <Hand className="w-4 h-4" /> PLANTARSE
+                <Shield className="w-4 h-4" />
+                <span>PLANTARSE (Stand)</span>
+              </button>
+            </div>
+          )}
+
+          {gameStage === 'roundEnd' && roundOutcome !== 'unlucky_challenge' && (
+            <div className="flex items-center justify-center gap-3 w-full">
+              <button
+                onClick={handleNextTurn}
+                className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 text-white font-bold text-xs rounded-xl shadow-lg transition transform hover:scale-105 cursor-pointer flex items-center gap-1.5"
+              >
+                <Play className="w-4 h-4 fill-white" />
+                <span>Siguiente Turno / Alumno →</span>
               </button>
 
-              {playerHand.length === 2 && (
-                <button
-                  onClick={requestDoubleDown}
-                  disabled={awaitingHitQuestion}
-                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-sm shadow-md transition transform hover:scale-105 active:scale-95 cursor-pointer"
-                >
-                  DOBLAR x2
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  setGameStage('betting');
+                  setPlayerHand([]);
+                  setDealerHand([]);
+                  setRoundOutcome(null);
+                  setResultMessage('');
+                }}
+                className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-amber-300 font-bold text-xs rounded-xl border border-gray-700 transition cursor-pointer"
+              >
+                Jugar otra mano
+              </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Challenge Question for Hit / Double */}
-      {awaitingHitQuestion && currentQuestion && (
-        <div className="w-full mt-6 animate-fadeIn">
-          <div className="text-center mb-2">
-            <span className="text-xs uppercase font-extrabold tracking-widest text-amber-400">
-              ⚡ {activeStudent ? `¡${activeStudent.name}, responde correctamente para recibir tu carta!` : '¡Responde correctamente para recibir tu carta!'}
+      {/* Unlucky English Challenge Section */}
+      {roundOutcome === 'unlucky_challenge' && currentQuestion && (
+        <div className="space-y-3 animate-fadeIn">
+          <div className="p-3 bg-red-950/60 border-2 border-red-500/60 rounded-2xl flex items-center justify-between text-xs">
+            <span className="font-bold text-red-200">
+              ⚠️ La casa ganó la mano. ¡Para salvar tu ronda y ganar fichas, responde el reto de inglés!
+            </span>
+            <span className="text-gray-400 font-mono">
+              Tema: {activity?.title || 'General'}
             </span>
           </div>
+
           <QuestionCard
             question={currentQuestion}
-            questionNumber={currentQuestionIndex + 1}
+            questionNumber={(currentQuestionIndex % (questions.length || 1)) + 1}
             totalQuestions={questions.length}
             onAnswer={handleQuestionAnswer}
+            activeStudent={activeStudent}
+            showNextButton={true}
+            onNext={handleNextTurn}
           />
-        </div>
-      )}
-
-      {/* Game Over Screen */}
-      {gameOver && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-gradient-to-b from-gray-900 to-black border-2 border-amber-500 rounded-3xl p-6 max-w-md w-full text-center shadow-2xl">
-            <Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-3 animate-bounce" />
-            <h3 className="text-2xl font-black text-white mb-2">¡Mesa de Blackjack Finalizada!</h3>
-            <p className="text-gray-300 text-sm mb-4">
-              Respuestas correctas: <span className="font-bold text-amber-400">{correctCount}</span> de{' '}
-              <span className="font-bold text-amber-400">{questions.length}</span>
-            </p>
-
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 mb-6">
-              <span className="text-xs text-amber-300 uppercase tracking-wider block mb-1 font-semibold">
-                Balance de Fichas
-              </span>
-              <span className="text-3xl font-black text-amber-400">{chips.toLocaleString()} Fichas</span>
-            </div>
-
-            <button
-              onClick={onBackToLobby}
-              className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-bold rounded-xl text-sm shadow-lg shadow-amber-500/30 hover:scale-105 transition"
-            >
-              Volver al Lobby del Casino
-            </button>
-          </div>
         </div>
       )}
     </div>

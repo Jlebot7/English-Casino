@@ -6,6 +6,7 @@ import LeaderboardModal from './components/LeaderboardModal';
 import SettingsModal from './components/SettingsModal';
 import ClassroomRosterModal from './components/ClassroomRosterModal';
 import ClassroomTurnBar from './components/ClassroomTurnBar';
+import StudentSpinnerModal from './components/StudentSpinnerModal';
 import SlotsGame from './components/games/SlotsGame';
 import RouletteGame from './components/games/RouletteGame';
 import BlackjackGame from './components/games/BlackjackGame';
@@ -13,51 +14,76 @@ import BlackjackGame from './components/games/BlackjackGame';
 import { DEFAULT_ACTIVITIES } from './data/defaultActivities';
 import { 
   getAllActivities, 
-  getActivityByPinOrId, 
   submitScore 
 } from './services/firebaseService';
 import { sounds } from './utils/soundEffects';
 
 const STORAGE_CHIPS_KEY = 'lucky_english_chips';
-const STORAGE_NICK_KEY = 'lucky_english_nick';
-const STORAGE_AVATAR_KEY = 'lucky_english_avatar';
 const STORAGE_GROQ_KEY = 'lucky_english_groq_key';
-const STORAGE_STUDENTS_KEY = 'lucky_english_students';
+const STORAGE_CLASSROOMS_KEY = 'lucky_english_classrooms';
+const STORAGE_ACTIVE_CLASSROOM_ID_KEY = 'lucky_english_active_classroom_id';
 
-const INITIAL_DEFAULT_STUDENTS = [
-  { id: 'std_1', name: 'Carlos Gómez', avatar: '🎩', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
-  { id: 'std_2', name: 'Sofía Martínez', avatar: '👑', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
-  { id: 'std_3', name: 'Mateo Silva', avatar: '🍀', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
-  { id: 'std_4', name: 'Valentina Ríos', avatar: '💎', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+const DEFAULT_INITIAL_CLASSROOMS = [
+  {
+    id: 'class_10a',
+    name: 'Salón 10-A (Mañana)',
+    students: [
+      { id: 'std_1', name: 'Carlos Gómez', avatar: '🎩', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+      { id: 'std_2', name: 'Sofía Martínez', avatar: '👑', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+      { id: 'std_3', name: 'Mateo Silva', avatar: '🍀', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+      { id: 'std_4', name: 'Valentina Ríos', avatar: '💎', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+      { id: 'std_5', name: 'Lucas Herrera', avatar: '🚀', chips: 1000, correctAnswers: 0, totalQuestions: 0 }
+    ]
+  },
+  {
+    id: 'class_10b',
+    name: 'Salón 10-B (Tarde)',
+    students: [
+      { id: 'std_6', name: 'Camila Torres', avatar: '🌸', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+      { id: 'std_7', name: 'Nicolás Castro', avatar: '⚡', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+      { id: 'std_8', name: 'Isabella Moreno', avatar: '⭐', chips: 1000, correctAnswers: 0, totalQuestions: 0 },
+      { id: 'std_9', name: 'Daniel Pardo', avatar: '🦁', chips: 1000, correctAnswers: 0, totalQuestions: 0 }
+    ]
+  }
 ];
 
 export default function App() {
   // App views: 'lobby' | 'teacher' | 'game'
   const [currentView, setCurrentView] = useState('lobby');
 
-  // Player state (solo mode)
+  // Player chips (pool / table)
   const [chips, setChips] = useState(() => {
     const saved = localStorage.getItem(STORAGE_CHIPS_KEY);
     return saved ? parseInt(saved, 10) : 1000;
   });
-  const [playerNick, setPlayerNick] = useState(() => {
-    return localStorage.getItem(STORAGE_NICK_KEY) || 'LuckyLearner';
-  });
-  const [playerAvatar, setPlayerAvatar] = useState(() => {
-    return localStorage.getItem(STORAGE_AVATAR_KEY) || '🎩';
-  });
 
-  // Students Roster for Classroom Mode
-  const [students, setStudents] = useState(() => {
+  // Multiple Classrooms (Salones)
+  const [classrooms, setClassrooms] = useState(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_STUDENTS_KEY);
-      return saved ? JSON.parse(saved) : INITIAL_DEFAULT_STUDENTS;
+      const saved = localStorage.getItem(STORAGE_CLASSROOMS_KEY);
+      return saved ? JSON.parse(saved) : DEFAULT_INITIAL_CLASSROOMS;
     } catch {
-      return INITIAL_DEFAULT_STUDENTS;
+      return DEFAULT_INITIAL_CLASSROOMS;
     }
   });
+
+  const [activeClassroomId, setActiveClassroomId] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_ACTIVE_CLASSROOM_ID_KEY);
+    return saved || 'class_10a';
+  });
+
+  // Active classroom & students
+  const activeClassroom = classrooms.find(c => c.id === activeClassroomId) || classrooms[0] || { id: 'default', name: 'Salón', students: [] };
+  const students = activeClassroom.students || [];
+
   const [activeStudentIndex, setActiveStudentIndex] = useState(0);
+  const activeStudent = students.length > 0 ? (students[activeStudentIndex] || students[0]) : null;
+
+  // Modals
   const [isRosterModalOpen, setIsRosterModalOpen] = useState(false);
+  const [isSpinnerOpen, setIsSpinnerOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
 
   // Settings & Configuration
   const [groqApiKey, setGroqApiKey] = useState(() => {
@@ -65,35 +91,26 @@ export default function App() {
   });
   const [volume, setVolume] = useState(0.6);
   const [isMuted, setIsMuted] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
 
   // Activities
   const [activities, setActivities] = useState(DEFAULT_ACTIVITIES);
-  const [currentActivity, setCurrentActivity] = useState(null);
+  const [currentActivity, setCurrentActivity] = useState(DEFAULT_ACTIVITIES[0]);
   const [activeGameMachine, setActiveGameMachine] = useState('slots'); // 'slots' | 'roulette' | 'blackjack'
-  const [showMachinePicker, setShowMachinePicker] = useState(false);
 
-  // Sync state to local storage
+  // Persist State
   useEffect(() => {
     localStorage.setItem(STORAGE_CHIPS_KEY, chips.toString());
   }, [chips]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_NICK_KEY, playerNick);
-  }, [playerNick]);
+    localStorage.setItem(STORAGE_CLASSROOMS_KEY, JSON.stringify(classrooms));
+  }, [classrooms]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_AVATAR_KEY, playerAvatar);
-  }, [playerAvatar]);
+    localStorage.setItem(STORAGE_ACTIVE_CLASSROOM_ID_KEY, activeClassroomId);
+  }, [activeClassroomId]);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_STUDENTS_KEY, JSON.stringify(students));
-  }, [students]);
-
-  // Active student in classroom turn
-  const activeStudent = students.length > 0 ? (students[activeStudentIndex] || students[0]) : null;
-
+  // Turn Navigation
   const handleNextStudent = () => {
     if (students.length === 0) return;
     setActiveStudentIndex(prev => (prev + 1) % students.length);
@@ -105,29 +122,74 @@ export default function App() {
     setActiveStudentIndex(randIdx);
   };
 
-  const handleUpdateStudents = (newList) => {
-    setStudents(newList);
-    if (activeStudentIndex >= newList.length) {
-      setActiveStudentIndex(Math.max(0, newList.length - 1));
+  // Classroom Management Handlers
+  const handleSelectClassroom = (id) => {
+    setActiveClassroomId(id);
+    setActiveStudentIndex(0);
+  };
+
+  const handleCreateClassroom = (name) => {
+    const newClass = {
+      id: `class_${Date.now()}`,
+      name,
+      students: []
+    };
+    setClassrooms(prev => [...prev, newClass]);
+    setActiveClassroomId(newClass.id);
+    setActiveStudentIndex(0);
+  };
+
+  const handleDeleteClassroom = (id) => {
+    if (classrooms.length <= 1) {
+      alert('Debe quedar al menos un salón de clases.');
+      return;
+    }
+    const updated = classrooms.filter(c => c.id !== id);
+    setClassrooms(updated);
+    if (activeClassroomId === id) {
+      setActiveClassroomId(updated[0].id);
+      setActiveStudentIndex(0);
+    }
+  };
+
+  // Update students of the active classroom
+  const handleUpdateStudents = (newStudentsList) => {
+    setClassrooms(prev => prev.map(c => {
+      if (c.id === activeClassroomId) {
+        return { ...c, students: newStudentsList };
+      }
+      return c;
+    }));
+
+    if (activeStudentIndex >= newStudentsList.length) {
+      setActiveStudentIndex(Math.max(0, newStudentsList.length - 1));
     }
   };
 
   // Record individual score for student who took the turn
   const handleRecordStudentScore = (studentId, chipDelta, isCorrect, countAsQuestion) => {
-    setStudents(prev => prev.map(s => {
-      if (s.id === studentId) {
+    setClassrooms(prev => prev.map(c => {
+      if (c.id === activeClassroomId) {
         return {
-          ...s,
-          chips: Math.max(0, (s.chips || 1000) + chipDelta),
-          correctAnswers: (s.correctAnswers || 0) + (isCorrect ? 1 : 0),
-          totalQuestions: (s.totalQuestions || 0) + (countAsQuestion ? 1 : 0)
+          ...c,
+          students: c.students.map(s => {
+            if (s.id === studentId) {
+              return {
+                ...s,
+                chips: Math.max(0, (s.chips || 1000) + chipDelta),
+                correctAnswers: (s.correctAnswers || 0) + (isCorrect ? 1 : 0),
+                totalQuestions: (s.totalQuestions || 0) + (countAsQuestion ? 1 : 0)
+              };
+            }
+            return s;
+          })
         };
       }
-      return s;
+      return c;
     }));
   };
 
-  // Load activities from Firebase or LocalStorage and merge with default ones
+  // Load activities from Firebase or LocalStorage
   const loadAllActivities = async () => {
     try {
       const customList = await getAllActivities();
@@ -138,6 +200,9 @@ export default function App() {
         }
       });
       setActivities(merged);
+      if (!currentActivity && merged.length > 0) {
+        setCurrentActivity(merged[0]);
+      }
     } catch (err) {
       console.warn('Could not load custom activities:', err);
     }
@@ -147,16 +212,6 @@ export default function App() {
     loadAllActivities();
   }, []);
 
-  // Check URL parameters for direct PIN join (e.g. ?pin=VERB77)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const pin = params.get('pin');
-    if (pin) {
-      handleJoinByPin(pin);
-    }
-  }, []);
-
-  // Update chips helper
   const handleUpdateChips = (delta) => {
     setChips(prev => Math.max(0, prev + delta));
   };
@@ -178,37 +233,25 @@ export default function App() {
     localStorage.setItem(STORAGE_GROQ_KEY, key);
   };
 
-  // Join activity via PIN
-  const handleJoinByPin = async (pin) => {
-    sounds.playChips();
-    const found = await getActivityByPinOrId(pin);
-    if (found) {
-      launchActivity(found);
-    } else {
-      sounds.playWrong();
-      alert(`Room PIN "${pin}" was not found. Please double check the code!`);
-    }
+  // Launch a game machine
+  const handleLaunchGame = (machineType) => {
+    setActiveGameMachine(machineType);
+    setCurrentView('game');
   };
 
-  // Launch activity
-  const launchActivity = (activity) => {
-    setCurrentActivity(activity);
-
-    if (activity.gameType && ['slots', 'roulette', 'blackjack'].includes(activity.gameType)) {
-      setActiveGameMachine(activity.gameType);
-      setShowMachinePicker(false);
-      setCurrentView('game');
-    } else {
-      setShowMachinePicker(true);
-      setCurrentView('game');
+  // When a student is chosen by the roulette spinner
+  const handleStudentSelectedFromSpinner = (chosenStudent) => {
+    const idx = students.findIndex(s => s.id === chosenStudent.id);
+    if (idx !== -1) {
+      setActiveStudentIndex(idx);
     }
   };
 
   // Game complete handler
   const handleFinishGame = async ({ gameId, correctAnswers, totalQuestions, finalChips }) => {
     try {
-      const scoringPlayer = activeStudent ? activeStudent.name : playerNick;
-      const scoringAvatar = activeStudent ? activeStudent.avatar : playerAvatar;
+      const scoringPlayer = activeStudent ? activeStudent.name : 'Estudiante';
+      const scoringAvatar = activeStudent ? activeStudent.avatar : '🎩';
 
       await submitScore({
         pin: currentActivity?.pin || 'CASINO',
@@ -244,15 +287,17 @@ export default function App() {
         {currentView === 'lobby' && (
           <StudentLobby
             activities={activities}
-            playerNick={playerNick}
-            setPlayerNick={setPlayerNick}
-            playerAvatar={playerAvatar}
-            setPlayerAvatar={setPlayerAvatar}
-            chips={chips}
-            onJoinPin={handleJoinByPin}
-            onSelectActivity={launchActivity}
+            currentActivity={currentActivity}
+            onSelectActivity={(act) => setCurrentActivity(act)}
+            onLaunchGame={handleLaunchGame}
+            classrooms={classrooms}
+            activeClassroomId={activeClassroomId}
+            onSelectClassroom={handleSelectClassroom}
             students={students}
+            activeStudent={activeStudent}
+            onOpenSpinner={() => setIsSpinnerOpen(true)}
             onOpenRosterModal={() => setIsRosterModalOpen(true)}
+            onOpenTeacherPortal={() => setCurrentView('teacher')}
           />
         )}
 
@@ -262,9 +307,19 @@ export default function App() {
             activities={activities}
             onActivitySaved={(saved) => {
               loadAllActivities();
+              if (saved) setCurrentActivity(saved);
             }}
-            onPlayActivity={launchActivity}
+            onPlayActivity={(act) => {
+              setCurrentActivity(act);
+              if (act.gameType && ['slots', 'roulette', 'blackjack'].includes(act.gameType)) {
+                setActiveGameMachine(act.gameType);
+              }
+              setCurrentView('game');
+            }}
             onOpenSettings={() => setIsSettingsOpen(true)}
+            classrooms={classrooms}
+            activeClassroomId={activeClassroomId}
+            onSelectClassroom={handleSelectClassroom}
             students={students}
             onOpenRosterModal={() => setIsRosterModalOpen(true)}
           />
@@ -278,104 +333,85 @@ export default function App() {
               activeStudent={activeStudent}
               onNextStudent={handleNextStudent}
               onRandomStudent={handleRandomStudent}
+              onOpenSpinner={() => setIsSpinnerOpen(true)}
               onOpenRosterModal={() => setIsRosterModalOpen(true)}
             />
 
-            {showMachinePicker ? (
-              <div className="max-w-xl mx-auto p-6 mt-4 bg-gradient-to-b from-gray-900 to-black border-2 border-amber-500 rounded-3xl text-center shadow-2xl animate-fadeIn">
-                <h2 className="text-2xl font-black text-amber-300 mb-2">
-                  Elige la Máquina del Casino
-                </h2>
-                <p className="text-xs text-gray-300 mb-6">
-                  Actividad seleccionada: <strong className="text-white">{currentActivity.title}</strong>
-                </p>
+            {activeGameMachine === 'slots' && (
+              <SlotsGame
+                activity={currentActivity}
+                chips={chips}
+                onUpdateChips={handleUpdateChips}
+                onFinishGame={handleFinishGame}
+                onBackToLobby={() => setCurrentView('lobby')}
+                activeStudent={activeStudent}
+                onRecordStudentScore={handleRecordStudentScore}
+                onAdvanceStudentTurn={handleNextStudent}
+              />
+            )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <button
-                    onClick={() => {
-                      sounds.playChips();
-                      setActiveGameMachine('slots');
-                      setShowMachinePicker(false);
-                    }}
-                    className="p-4 rounded-2xl bg-red-950/60 border-2 border-red-500/60 hover:border-red-400 text-center transition hover:scale-105 cursor-pointer"
-                  >
-                    <div className="text-3xl mb-1">🎰</div>
-                    <h4 className="text-sm font-bold text-white">Lucky Slots</h4>
-                    <p className="text-[10px] text-gray-400">Rodillos y Jackpots</p>
-                  </button>
+            {activeGameMachine === 'roulette' && (
+              <RouletteGame
+                activity={currentActivity}
+                chips={chips}
+                onUpdateChips={handleUpdateChips}
+                onFinishGame={handleFinishGame}
+                onBackToLobby={() => setCurrentView('lobby')}
+                activeStudent={activeStudent}
+                onRecordStudentScore={handleRecordStudentScore}
+                onAdvanceStudentTurn={handleNextStudent}
+              />
+            )}
 
-                  <button
-                    onClick={() => {
-                      sounds.playChips();
-                      setActiveGameMachine('roulette');
-                      setShowMachinePicker(false);
-                    }}
-                    className="p-4 rounded-2xl bg-blue-950/60 border-2 border-blue-500/60 hover:border-blue-400 text-center transition hover:scale-105 cursor-pointer"
-                  >
-                    <div className="text-3xl mb-1">🎡</div>
-                    <h4 className="text-sm font-bold text-white">Ruleta</h4>
-                    <p className="text-[10px] text-gray-400">Ruleta de la Fortuna</p>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      sounds.playChips();
-                      setActiveGameMachine('blackjack');
-                      setShowMachinePicker(false);
-                    }}
-                    className="p-4 rounded-2xl bg-emerald-950/60 border-2 border-emerald-500/60 hover:border-emerald-400 text-center transition hover:scale-105 cursor-pointer"
-                  >
-                    <div className="text-3xl mb-1">🃏</div>
-                    <h4 className="text-sm font-bold text-white">21 Blackjack</h4>
-                    <p className="text-[10px] text-gray-400">Cartas y Crupier</p>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                {activeGameMachine === 'slots' && (
-                  <SlotsGame
-                    activity={currentActivity}
-                    chips={chips}
-                    onUpdateChips={handleUpdateChips}
-                    onFinishGame={handleFinishGame}
-                    onBackToLobby={() => setCurrentView('lobby')}
-                    activeStudent={activeStudent}
-                    onRecordStudentScore={handleRecordStudentScore}
-                    onAdvanceStudentTurn={handleNextStudent}
-                  />
-                )}
-
-                {activeGameMachine === 'roulette' && (
-                  <RouletteGame
-                    activity={currentActivity}
-                    chips={chips}
-                    onUpdateChips={handleUpdateChips}
-                    onFinishGame={handleFinishGame}
-                    onBackToLobby={() => setCurrentView('lobby')}
-                    activeStudent={activeStudent}
-                    onRecordStudentScore={handleRecordStudentScore}
-                    onAdvanceStudentTurn={handleNextStudent}
-                  />
-                )}
-
-                {activeGameMachine === 'blackjack' && (
-                  <BlackjackGame
-                    activity={currentActivity}
-                    chips={chips}
-                    onUpdateChips={handleUpdateChips}
-                    onFinishGame={handleFinishGame}
-                    onBackToLobby={() => setCurrentView('lobby')}
-                    activeStudent={activeStudent}
-                    onRecordStudentScore={handleRecordStudentScore}
-                    onAdvanceStudentTurn={handleNextStudent}
-                  />
-                )}
-              </>
+            {activeGameMachine === 'blackjack' && (
+              <BlackjackGame
+                activity={currentActivity}
+                chips={chips}
+                onUpdateChips={handleUpdateChips}
+                onFinishGame={handleFinishGame}
+                onBackToLobby={() => setCurrentView('lobby')}
+                activeStudent={activeStudent}
+                onRecordStudentScore={handleRecordStudentScore}
+                onAdvanceStudentTurn={handleNextStudent}
+              />
             )}
           </div>
         )}
       </main>
+
+      {/* Classroom Roster & Salones Modal */}
+      <ClassroomRosterModal
+        isOpen={isRosterModalOpen}
+        onClose={() => setIsRosterModalOpen(false)}
+        classrooms={classrooms}
+        activeClassroomId={activeClassroomId}
+        onSelectClassroom={handleSelectClassroom}
+        onCreateClassroom={handleCreateClassroom}
+        onDeleteClassroom={handleDeleteClassroom}
+        students={students}
+        onUpdateStudents={handleUpdateStudents}
+        activeStudentIndex={activeStudentIndex}
+        onSelectActiveStudent={(idx) => setActiveStudentIndex(idx)}
+        onOpenSpinner={() => setIsSpinnerOpen(true)}
+      />
+
+      {/* Student Luck Wheel / Spinner Modal */}
+      <StudentSpinnerModal
+        isOpen={isSpinnerOpen}
+        onClose={() => setIsSpinnerOpen(false)}
+        students={students}
+        activeClassroomName={activeClassroom?.name}
+        onStudentSelected={handleStudentSelectedFromSpinner}
+        onOpenRosterModal={() => setIsRosterModalOpen(true)}
+      />
+
+      {/* Leaderboard Modal */}
+      <LeaderboardModal
+        isOpen={isLeaderboardOpen}
+        onClose={() => setIsLeaderboardOpen(false)}
+        students={students}
+        pin={currentActivity?.pin}
+      />
 
       {/* Settings Modal */}
       <SettingsModal
@@ -387,24 +423,6 @@ export default function App() {
         onChangeVolume={handleChangeVolume}
         isMuted={isMuted}
         onToggleMute={handleToggleMute}
-      />
-
-      {/* Leaderboard Modal */}
-      <LeaderboardModal
-        isOpen={isLeaderboardOpen}
-        onClose={() => setIsLeaderboardOpen(false)}
-        currentPin={currentActivity?.pin}
-      />
-
-      {/* Classroom Student Roster Modal */}
-      <ClassroomRosterModal
-        isOpen={isRosterModalOpen}
-        onClose={() => setIsRosterModalOpen(false)}
-        students={students}
-        onUpdateStudents={handleUpdateStudents}
-        activeStudentIndex={activeStudentIndex}
-        onSelectActiveStudent={(idx) => setActiveStudentIndex(idx)}
-        onRandomStudent={handleRandomStudent}
       />
     </div>
   );

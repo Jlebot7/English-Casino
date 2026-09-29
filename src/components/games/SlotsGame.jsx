@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
-import { Sparkles, Trophy, RotateCcw, Volume2, Coins, Flame, ArrowLeft, User } from 'lucide-react';
+import { Sparkles, Trophy, RotateCcw, Volume2, Coins, Flame, ArrowLeft, User, CheckCircle2, AlertCircle, Play } from 'lucide-react';
 import { sounds } from '../../utils/soundEffects';
 import QuestionCard from '../QuestionCard';
 
@@ -27,17 +27,18 @@ export default function SlotsGame({
   const [isSpinning, setIsSpinning] = useState(false);
   const [reels, setReels] = useState(['7️⃣', '7️⃣', '7️⃣']);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [awaitingAnswer, setAwaitingAnswer] = useState(false);
+
+  // Luck / Exoneration states
+  const [roundOutcome, setRoundOutcome] = useState(null); // 'lucky_exonerated' | 'unlucky_challenge' | null
   const [winMessage, setWinMessage] = useState(null);
-  const [consecutiveWins, setConsecutiveWins] = useState(0);
+  const [lastWonChips, setLastWonChips] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
-  const [totalAnswered, setTotalAnswered] = useState(0);
-  const [gameOver, setGameOver] = useState(false);
+  const [totalRounds, setTotalRounds] = useState(0);
 
   const questions = activity?.questions || [];
-  const currentQuestion = questions[currentQuestionIndex];
+  const currentQuestion = questions[currentQuestionIndex % (questions.length || 1)];
 
-  // Pick random symbol weighted
+  // Helper to pick random symbol with weight
   const getRandomSymbol = () => {
     const totalWeight = SYMBOLS.reduce((acc, s) => acc + s.weight, 0);
     let rand = Math.random() * totalWeight;
@@ -48,47 +49,28 @@ export default function SlotsGame({
     return SYMBOLS[0];
   };
 
-  // Pull lever or press spin
+  // Student pulls lever or presses Spin to test luck!
   const handleSpinRequest = () => {
-    if (isSpinning || awaitingAnswer || gameOver) return;
+    if (isSpinning || roundOutcome === 'unlucky_challenge') return;
     if (chips < bet) {
       sounds.playWrong();
-      alert("No hay suficientes fichas para esta apuesta. Reduce la apuesta o recarga.");
+      alert('No hay suficientes fichas para esta apuesta. Ajusta la apuesta a continuación.');
       return;
     }
 
-    // Deduct bet immediately
+    // Deduct bet initially
     onUpdateChips(-bet);
     if (onRecordStudentScore && activeStudent) {
       onRecordStudentScore(activeStudent.id, -bet, false, false);
     }
 
     sounds.playLever();
-
-    // Trigger question to authorize spin outcome
-    setAwaitingAnswer(true);
-    setWinMessage(null);
-  };
-
-  // Called when student answers the question
-  const handleQuestionAnswer = (isCorrect, selected, question) => {
-    setTotalAnswered(prev => prev + 1);
-
-    if (isCorrect) {
-      setCorrectCount(prev => prev + 1);
-      setConsecutiveWins(prev => prev + 1);
-    } else {
-      setConsecutiveWins(0);
-    }
-
-    // Run the slot machine spin animation
-    executeReelSpin(isCorrect);
-  };
-
-  const executeReelSpin = (isCorrect) => {
     setIsSpinning(true);
-    setAwaitingAnswer(false);
+    setRoundOutcome(null);
+    setWinMessage(null);
+    setLastWonChips(0);
 
+    // Reel spin animation
     let ticks = 0;
     const interval = setInterval(() => {
       ticks++;
@@ -99,259 +81,280 @@ export default function SlotsGame({
         SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)].icon,
       ]);
 
-      if (ticks > 18) {
+      if (ticks > 16) {
         clearInterval(interval);
-        finalizeReels(isCorrect);
+        finalizeSpin();
       }
     }, 90);
   };
 
-  const finalizeReels = (isCorrect) => {
+  const finalizeSpin = () => {
     setIsSpinning(false);
+    setTotalRounds(prev => prev + 1);
 
+    // Roll for luck: ~45% chance of matching symbols
+    const hasLuck = Math.random() < 0.45;
     let finalSymbols;
     let wonChips = 0;
 
-    if (isCorrect) {
-      // High chance of 3 matching symbols on correct answer!
-      const luckyRoll = Math.random();
-      if (luckyRoll > 0.45) {
-        // 3 of a kind!
-        const hit = getRandomSymbol();
-        finalSymbols = [hit.icon, hit.icon, hit.icon];
-        wonChips = Math.round(bet * hit.mult * (consecutiveWins >= 2 ? 1.5 : 1));
+    if (hasLuck) {
+      const isJackpot = Math.random() < 0.3;
+      if (isJackpot) {
+        // 3 matching symbols (Jackpot!)
+        const sym = getRandomSymbol();
+        finalSymbols = [sym.icon, sym.icon, sym.icon];
+        wonChips = Math.round(bet * sym.mult);
       } else {
-        // 2 of a kind
-        const hit = getRandomSymbol();
-        const other = getRandomSymbol();
-        finalSymbols = [hit.icon, hit.icon, other.icon];
-        wonChips = Math.round(bet * 1.5);
+        // 2 matching symbols
+        const sym = getRandomSymbol();
+        const other = SYMBOLS.find(s => s.icon !== sym.icon) || sym;
+        finalSymbols = [sym.icon, sym.icon, other.icon];
+        wonChips = Math.round(bet * 2);
       }
+
+      setReels(finalSymbols);
+      setLastWonChips(wonChips);
+      onUpdateChips(wonChips);
+
+      if (onRecordStudentScore && activeStudent) {
+        onRecordStudentScore(activeStudent.id, wonChips, true, false);
+      }
+
+      setRoundOutcome('lucky_exonerated');
+      sounds.playJackpot();
+      confetti({
+        particleCount: 130,
+        spread: 80,
+        origin: { y: 0.6 }
+      });
+
+      setWinMessage(
+        `🎰 ¡EXONERADO POR SUERTE! Los rodillos coincidieron (${finalSymbols.join(' ')}). ¡${activeStudent ? activeStudent.name : 'El estudiante'} se salva del reto y cobra +${wonChips} fichas!`
+      );
     } else {
-      // Wrong answer: miss
+      // Unlucky: 3 distinct symbols
       const s1 = SYMBOLS[0];
       const s2 = SYMBOLS[1];
       const s3 = SYMBOLS[2];
       finalSymbols = [s1.icon, s2.icon, s3.icon];
-      wonChips = 0;
+      setReels(finalSymbols);
+      setRoundOutcome('unlucky_challenge');
+      sounds.playWrong();
+      setWinMessage('⚠️ ¡Mala suerte! Los rodillos no coincidieron. ¡Debes responder el reto de inglés para salvar tu turno!');
     }
+  };
 
-    setReels(finalSymbols);
+  // Called when student answers the question after being unlucky
+  const handleQuestionAnswer = (isCorrect, selected, q) => {
+    if (isCorrect) {
+      setCorrectCount(prev => prev + 1);
+      const reward = (q?.points || 200) + bet;
+      onUpdateChips(reward);
 
-    if (wonChips > 0) {
-      onUpdateChips(wonChips);
       if (onRecordStudentScore && activeStudent) {
-        onRecordStudentScore(activeStudent.id, wonChips, isCorrect, true);
+        onRecordStudentScore(activeStudent.id, reward, true, true);
       }
 
-      if (finalSymbols[0] === finalSymbols[1] && finalSymbols[1] === finalSymbols[2]) {
-        // JACKPOT!
-        sounds.playJackpot();
-        confetti({
-          particleCount: 120,
-          spread: 80,
-          origin: { y: 0.6 }
-        });
-        setWinMessage(`🎰 ¡MEGA JACKPOT! ¡${activeStudent ? activeStudent.name : 'Ganaste'} +${wonChips} Fichas!`);
-      } else {
-        sounds.playCoin();
-        setWinMessage(`✨ ¡Acierto de Rodillos! +${wonChips} Fichas ganadas.`);
-      }
+      sounds.playCorrect();
+      confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+      setWinMessage(`🎯 ¡Excelente! ${activeStudent ? activeStudent.name : 'Respuesta correcta'}. Salvaste tu turno y ganaste +${reward} fichas.`);
     } else {
+      sounds.playWrong();
       if (onRecordStudentScore && activeStudent) {
-        onRecordStudentScore(activeStudent.id, 0, isCorrect, true);
+        onRecordStudentScore(activeStudent.id, 0, false, true);
       }
-      setWinMessage('❌ Sin coincidencia. ¡Inténtalo en el próximo turno!');
+      setWinMessage('❌ Respuesta incorrecta. No te preocupes, ¡la práctica hace al maestro!');
     }
 
-    // Advance student turn for next question
+    // Step to next question index
+    setCurrentQuestionIndex(prev => (prev + 1) % (questions.length || 1));
+  };
+
+  const handleNextTurn = () => {
+    setRoundOutcome(null);
+    setWinMessage(null);
     if (onAdvanceStudentTurn) {
-      setTimeout(() => {
-        onAdvanceStudentTurn();
-      }, 3000);
-    }
-
-    // Check if activity is finished
-    if (currentQuestionIndex + 1 >= questions.length) {
-      setTimeout(() => {
-        setGameOver(true);
-        if (onFinishGame) {
-          onFinishGame({
-            gameId: 'slots',
-            correctAnswers: isCorrect ? correctCount + 1 : correctCount,
-            totalQuestions: questions.length,
-            finalChips: chips + wonChips
-          });
-        }
-      }, 2500);
-    } else {
-      setTimeout(() => {
-        setCurrentQuestionIndex(prev => prev + 1);
-        setWinMessage(null);
-      }, 3500);
+      onAdvanceStudentTurn();
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4 flex flex-col items-center">
-      {/* Top Bar Navigation */}
-      <div className="w-full flex items-center justify-between mb-4">
+    <div className="max-w-4xl mx-auto p-4 animate-fadeIn space-y-6">
+      {/* Top Header Navigation */}
+      <div className="flex items-center justify-between">
         <button
           onClick={onBackToLobby}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs font-semibold border border-gray-700 transition"
+          className="px-3.5 py-2 rounded-xl bg-gray-900 border border-gray-800 hover:border-amber-500/40 text-xs font-bold text-gray-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
         >
-          <ArrowLeft className="w-4 h-4" /> Salir al Lobby
+          <ArrowLeft className="w-4 h-4" /> Sala Principal
         </button>
 
-        <div className="flex items-center gap-3">
-          {activeStudent && (
-            <div className="flex items-center gap-2 bg-amber-500/20 border border-amber-400 px-3 py-1 rounded-xl text-xs font-bold text-amber-300 animate-pulse">
-              <span>{activeStudent.avatar}</span>
-              <span>Turno: {activeStudent.name}</span>
-            </div>
-          )}
+        <div className="text-center">
+          <h2 className="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-100 uppercase tracking-wider">
+            🎰 Slots de la Fortuna
+          </h2>
+          <p className="text-xs text-gray-400">
+            Regla: ¡Si coinciden los rodillos te salvas de la pregunta! Si no, ¡a responder!
+          </p>
+        </div>
 
-          {consecutiveWins > 1 && (
-            <span className="flex items-center gap-1 px-3 py-1 bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded-full text-xs font-bold animate-pulse">
-              <Flame className="w-3.5 h-3.5 text-orange-400" />
-              Racha x{consecutiveWins}!
-            </span>
-          )}
-
-          <div className="flex items-center gap-2 bg-gradient-to-r from-amber-600/30 to-yellow-600/30 border border-amber-500/40 px-4 py-1.5 rounded-xl shadow-lg">
-            <Coins className="w-4 h-4 text-amber-400" />
-            <span className="text-sm font-black text-amber-300">{chips.toLocaleString()} Fichas</span>
+        <div className="flex items-center gap-2">
+          <div className="px-3 py-1.5 rounded-xl bg-black/60 border border-amber-500/40 text-amber-400 text-xs font-bold flex items-center gap-1.5">
+            <Coins className="w-4 h-4 text-yellow-400" />
+            <span>{chips.toLocaleString()} Fichas</span>
           </div>
         </div>
       </div>
 
-      {/* Main Slot Machine Chassis */}
-      <div className="w-full max-w-xl bg-gradient-to-b from-red-950 via-gray-900 to-black border-4 border-amber-500 rounded-3xl p-6 shadow-2xl relative">
-        {/* Neon Marquee Header */}
-        <div className="text-center mb-6 relative">
-          <div className="inline-block bg-black/60 px-6 py-2 rounded-2xl border-2 border-amber-400 shadow-lg shadow-amber-500/30">
-            <h2 className="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-200 tracking-wider">
-              🎰 LUCKY SLOTS 777
-            </h2>
+      {/* Active Student Turn Badge */}
+      {activeStudent && (
+        <div className="p-3 bg-gradient-to-r from-purple-950/60 via-indigo-950/60 to-purple-950/60 border-2 border-purple-500/50 rounded-2xl flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">{activeStudent.avatar || '🎩'}</span>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-purple-300 tracking-wider">Turno en la Máquina:</span>
+              <h4 className="text-base font-black text-white">{activeStudent.name}</h4>
+            </div>
           </div>
-          <p className="text-xs text-amber-200/70 mt-1 uppercase tracking-widest font-semibold">
-            {activeStudent ? `Turno de: ${activeStudent.name} ${activeStudent.avatar}` : 'Grammar & Vocabulary Reels'}
-          </p>
+
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-amber-300 font-bold bg-black/40 px-2.5 py-1 rounded-xl border border-amber-500/20">
+              💰 {activeStudent.chips || 1000} Fichas Alumno
+            </span>
+            {onAdvanceStudentTurn && (
+              <button
+                onClick={onAdvanceStudentTurn}
+                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-xs text-gray-300 font-bold rounded-xl border border-gray-700 transition cursor-pointer"
+              >
+                Cambiar Turno ↻
+              </button>
+            )}
+          </div>
         </div>
+      )}
 
-        {/* 3 Reels Window */}
-        <div className="bg-gradient-to-b from-gray-950 to-gray-900 border-4 border-yellow-600/60 rounded-2xl p-4 shadow-inner mb-6 relative">
-          {/* Payline Guides */}
-          <div className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 bg-red-500 rounded-full animate-ping" />
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 bg-red-500 rounded-full animate-ping" />
+      {/* Slot Machine Cabinet */}
+      <div className="bg-gradient-to-b from-red-950 via-gray-950 to-black border-4 border-amber-500 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden text-center">
+        {/* Neon Light Top Border */}
+        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-yellow-400 via-amber-500 to-red-500 animate-pulse" />
 
+        {/* Reels Display Box */}
+        <div className="max-w-md mx-auto my-4 bg-black/80 border-4 border-amber-400/80 rounded-2xl p-4 shadow-inner">
           <div className="grid grid-cols-3 gap-3 md:gap-4">
-            {reels.map((icon, idx) => (
+            {reels.map((symbol, idx) => (
               <div
                 key={idx}
-                className="h-28 md:h-36 bg-gradient-to-b from-white via-amber-50 to-amber-100 border-2 border-amber-400 rounded-xl flex items-center justify-center text-5xl md:text-6xl shadow-lg shadow-black/60 overflow-hidden transform transition-all select-none"
+                className={`h-28 md:h-32 rounded-xl bg-gradient-to-b from-gray-900 to-black border-2 border-amber-500/40 flex items-center justify-center text-5xl md:text-6xl shadow-lg select-none transition-transform ${
+                  isSpinning ? 'scale-95 animate-bounce' : 'scale-100'
+                }`}
               >
-                <span className={`inline-block ${isSpinning ? 'animate-bounce blur-[1px]' : ''}`}>
-                  {icon}
-                </span>
+                {symbol}
               </div>
             ))}
           </div>
         </div>
 
-        {/* Win / Feedback Banner */}
+        {/* Outcome Notification Banner */}
         {winMessage && (
-          <div className="mb-4 text-center py-2 px-4 rounded-xl bg-amber-500/20 border border-amber-400 text-amber-200 font-bold text-sm animate-bounce shadow-md">
-            {winMessage}
+          <div className={`max-w-xl mx-auto my-3 p-3.5 rounded-2xl border text-xs md:text-sm font-bold flex items-center justify-center gap-2 animate-fadeIn ${
+            roundOutcome === 'lucky_exonerated'
+              ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200 shadow-lg shadow-emerald-950/40'
+              : 'bg-amber-950/80 border-amber-500 text-amber-200'
+          }`}>
+            {roundOutcome === 'lucky_exonerated' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+            )}
+            <span>{winMessage}</span>
           </div>
         )}
 
-        {/* Betting Controls & Spin Button */}
-        <div className="flex flex-wrap items-center justify-between gap-4 bg-black/40 p-4 rounded-2xl border border-gray-800">
-          <div>
-            <label className="block text-[11px] text-gray-400 uppercase font-bold mb-1">
-              Apuesta en Fichas
-            </label>
-            <div className="flex items-center gap-1.5">
-              {[25, 50, 100, 250].map((amount) => (
-                <button
-                  key={amount}
-                  onClick={() => {
-                    sounds.playChips();
-                    setBet(amount);
-                  }}
-                  disabled={isSpinning || awaitingAnswer}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
-                    bet === amount
-                      ? 'bg-amber-500 text-black border-amber-400 shadow-md shadow-amber-500/30'
-                      : 'bg-gray-800 text-gray-300 border-gray-700 hover:border-amber-400'
-                  }`}
-                >
-                  {amount}
-                </button>
-              ))}
-            </div>
+        {/* Bet Selection & Controls */}
+        <div className="max-w-md mx-auto mt-4 pt-3 border-t border-gray-800 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-gray-400">Apuesta:</span>
+            {[25, 50, 100, 200].map((amount) => (
+              <button
+                key={amount}
+                onClick={() => {
+                  sounds.playChips();
+                  setBet(amount);
+                }}
+                disabled={isSpinning || roundOutcome === 'unlucky_challenge'}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-50 ${
+                  bet === amount
+                    ? 'bg-amber-500 text-black shadow-md shadow-amber-500/30 font-black scale-105'
+                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+                }`}
+              >
+                {amount}
+              </button>
+            ))}
           </div>
 
-          <button
-            onClick={handleSpinRequest}
-            disabled={isSpinning || awaitingAnswer || gameOver}
-            className={`px-8 py-3.5 rounded-2xl font-black text-base uppercase tracking-wider transition-all transform active:scale-95 shadow-xl flex items-center gap-2 cursor-pointer disabled:cursor-not-allowed ${
-              isSpinning || awaitingAnswer
-                ? 'bg-gray-700 text-gray-400 border border-gray-600'
-                : 'bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-gray-950 border-2 border-yellow-200 shadow-amber-500/40 hover:scale-105'
-            }`}
-          >
-            <Sparkles className="w-5 h-5 text-gray-950" />
-            {isSpinning ? 'Girando...' : awaitingAnswer ? '¡Responde abajo!' : 'TIRAR Y GIRAR'}
-          </button>
+          {/* Spin / Lever Button or Next Turn Button */}
+          {roundOutcome !== 'unlucky_challenge' ? (
+            <button
+              onClick={handleSpinRequest}
+              disabled={isSpinning}
+              className="px-6 py-3 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-300 text-gray-950 font-black text-sm rounded-2xl shadow-xl shadow-amber-500/30 transition transform hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer flex items-center gap-2"
+            >
+              <Flame className="w-4 h-4 fill-black" />
+              <span>{isSpinning ? '¡Girando...!' : '¡TIRAR DE LA PALANCA!'}</span>
+            </button>
+          ) : (
+            <span className="text-xs text-red-400 font-bold animate-pulse">
+              👇 ¡Responde el reto para continuar!
+            </span>
+          )}
         </div>
+
+        {/* Lucky Exoneration Success Actions */}
+        {roundOutcome === 'lucky_exonerated' && (
+          <div className="mt-4 pt-3 border-t border-emerald-800/40 flex justify-center gap-3">
+            <button
+              onClick={handleNextTurn}
+              className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 text-white font-bold text-xs rounded-xl shadow-lg transition transform hover:scale-105 cursor-pointer flex items-center gap-1.5"
+            >
+              <Play className="w-4 h-4 fill-white" />
+              <span>Siguiente Turno / Alumno →</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setRoundOutcome(null);
+                setWinMessage(null);
+              }}
+              className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-amber-300 font-bold text-xs rounded-xl border border-gray-700 transition cursor-pointer"
+            >
+              Tirar de nuevo
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Educational Challenge Question */}
-      {awaitingAnswer && currentQuestion && (
-        <div className="w-full mt-6 animate-fadeIn">
-          <div className="text-center mb-2">
-            <span className="text-xs uppercase font-extrabold tracking-widest text-amber-400">
-              ⚡ {activeStudent ? `¡${activeStudent.name}, responde correctamente para desbloquear el premio!` : '¡Responde correctamente para desbloquear el premio!'}
+      {/* Unlucky English Challenge Section */}
+      {roundOutcome === 'unlucky_challenge' && currentQuestion && (
+        <div className="space-y-3 animate-fadeIn">
+          <div className="p-3 bg-red-950/60 border-2 border-red-500/60 rounded-2xl flex items-center justify-between text-xs">
+            <span className="font-bold text-red-200">
+              ⚠️ Al no coincidir los rodillos, el estudiante debe responder el siguiente desafío de inglés:
+            </span>
+            <span className="text-gray-400 font-mono">
+              Tema: {activity?.title || 'Inglés General'}
             </span>
           </div>
+
           <QuestionCard
             question={currentQuestion}
-            questionNumber={currentQuestionIndex + 1}
+            questionNumber={(currentQuestionIndex % (questions.length || 1)) + 1}
             totalQuestions={questions.length}
             onAnswer={handleQuestionAnswer}
+            activeStudent={activeStudent}
+            showNextButton={true}
+            onNext={handleNextTurn}
           />
-        </div>
-      )}
-
-      {/* Game Over Screen */}
-      {gameOver && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-gradient-to-b from-gray-900 to-black border-2 border-amber-500 rounded-3xl p-6 max-w-md w-full text-center shadow-2xl">
-            <Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-3 animate-bounce" />
-            <h3 className="text-2xl font-black text-white mb-2">¡Ronda Finalizada!</h3>
-            <p className="text-gray-300 text-sm mb-4">
-              Respuestas correctas: <span className="font-bold text-amber-400">{correctCount}</span> de{' '}
-              <span className="font-bold text-amber-400">{questions.length}</span>
-            </p>
-
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 mb-6">
-              <span className="text-xs text-amber-300 uppercase tracking-wider block mb-1 font-semibold">
-                Balance Total de Fichas
-              </span>
-              <span className="text-3xl font-black text-amber-400">{chips.toLocaleString()} Fichas</span>
-            </div>
-
-            <div className="flex gap-3 justify-center">
-              <button
-                onClick={onBackToLobby}
-                className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-bold rounded-xl text-sm shadow-lg shadow-amber-500/30 hover:scale-105 transition"
-              >
-                Volver al Lobby del Casino
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>

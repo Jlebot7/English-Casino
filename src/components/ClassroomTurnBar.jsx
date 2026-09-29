@@ -1,24 +1,25 @@
 import React from 'react';
-import { Users, Dices, ChevronRight, Trophy, Sparkles, Coins } from 'lucide-react';
+import { Users, Dices, ChevronRight, Trophy, Sparkles, Coins, Disc3 } from 'lucide-react';
 import { sounds } from '../utils/soundEffects';
 
 export default function ClassroomTurnBar({
-  students,
+  students = [],
   activeStudent,
   onNextStudent,
   onRandomStudent,
+  onOpenSpinner,
   onOpenRosterModal
 }) {
   if (!students || students.length === 0) {
     return (
-      <div className="w-full max-w-4xl mx-auto mb-4 px-4 py-2 bg-gray-900/60 border border-gray-800 rounded-2xl flex items-center justify-between text-xs backdrop-blur-sm">
+      <div className="w-full max-w-4xl mx-auto mb-4 px-4 py-2.5 bg-gray-900/60 border border-gray-800 rounded-2xl flex items-center justify-between text-xs backdrop-blur-sm">
         <span className="text-gray-400 flex items-center gap-1.5">
           <Users className="w-4 h-4 text-amber-400" />
-          ¿Juegas con tu clase? Puedes ingresar los nombres de tus estudiantes.
+          Modo Proyección: Ingresa los nombres de tus estudiantes para jugar por turnos.
         </span>
         <button
           onClick={onOpenRosterModal}
-          className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg font-bold text-xs flex items-center gap-1 transition"
+          className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg font-bold text-xs flex items-center gap-1 transition cursor-pointer"
         >
           <Users className="w-3.5 h-3.5" /> Cargar Estudiantes
         </button>
@@ -39,8 +40,8 @@ export default function ClassroomTurnBar({
             <span className="text-[10px] uppercase font-black tracking-widest text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
               🎯 Turno de Juego
             </span>
-            <span className="text-xs text-gray-400">
-              ({students.indexOf(activeStudent) + 1} de {students.length})
+            <span className="text-xs text-gray-400 font-mono">
+              ({students.indexOf(activeStudent) + 1} / {students.length})
             </span>
           </div>
           <h4 className="text-base font-black text-white flex items-center gap-2">
@@ -58,18 +59,20 @@ export default function ClassroomTurnBar({
           </span>
         </div>
 
-        {/* Random Student Button */}
-        <button
-          onClick={() => {
-            sounds.playTick();
-            onRandomStudent();
-          }}
-          className="p-2 bg-purple-900/60 hover:bg-purple-800 border border-purple-500/50 text-purple-200 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow"
-          title="Elegir al azar el próximo estudiante"
-        >
-          <Dices className="w-4 h-4 text-purple-300" />
-          <span className="hidden sm:inline">Al Azar</span>
-        </button>
+        {/* Spinner Modal Trigger Button */}
+        {onOpenSpinner && (
+          <button
+            onClick={() => {
+              sounds.playTick();
+              onOpenSpinner();
+            }}
+            className="px-3 py-1.5 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
+            title="Abrir ruleta de la suerte para sortear estudiante"
+          >
+            <Disc3 className="w-4 h-4 text-yellow-300 animate-spin" />
+            <span className="hidden sm:inline">Ruleta Alumnos</span>
+          </button>
+        )}
 
         {/* Next Turn Button */}
         <button
@@ -77,8 +80,8 @@ export default function ClassroomTurnBar({
             sounds.playTick();
             onNextStudent();
           }}
-          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black rounded-xl text-xs font-black transition flex items-center gap-1 shadow-md shadow-amber-500/20"
-          title="Pasar al siguiente estudiante"
+          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black rounded-xl text-xs font-black transition flex items-center gap-1 shadow-md shadow-amber-500/20 cursor-pointer"
+          title="Pasar al siguiente estudiante en orden"
         >
           <span>Siguiente</span>
           <ChevronRight className="w-4 h-4" />
@@ -87,8 +90,8 @@ export default function ClassroomTurnBar({
         {/* Manage Roster Button */}
         <button
           onClick={onOpenRosterModal}
-          className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-xl text-xs font-bold transition"
-          title="Ver o modificar lista de estudiantes"
+          className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-xl text-xs font-bold transition cursor-pointer"
+          title="Ver o modificar salones y estudiantes"
         >
           <Users className="w-4 h-4" />
         </button>

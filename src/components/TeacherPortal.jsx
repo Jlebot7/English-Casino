@@ -4,28 +4,23 @@ import {
   Plus, 
   Trash2, 
   Save, 
-  Share2, 
   Play, 
   Key, 
-  HelpCircle, 
   Layers, 
   Check, 
-  Copy, 
   BookOpen, 
-  Settings as SettingsIcon,
-  Bot,
-  Users,
-  School
+  Users, 
+  School, 
+  FileQuestion 
 } from 'lucide-react';
-import { generateEnglishQuiz, GROQ_MODELS } from '../services/groqService';
+import { generateEnglishQuiz, GROQ_MODELS, CHALLENGE_TYPES } from '../services/groqService';
 import { saveActivity, deleteActivity, generateGamePin } from '../services/firebaseService';
 import { sounds } from '../utils/soundEffects';
 
-const CEFR_LEVELS = ['A1 Beginner', 'A2 Elementary', 'B1 Intermediate', 'B2 Upper-Intermediate', 'C1 Advanced'];
 const GAME_TYPES = [
-  { id: 'all', name: 'All Machines (Lobby choice)' },
+  { id: 'all', name: 'Todas las Máquinas (Elección en Sala)' },
   { id: 'slots', name: '🎰 Lucky Slots' },
-  { id: 'roulette', name: '🎡 Roulette of Fortune' },
+  { id: 'roulette', name: '🎡 Ruleta Vegas' },
   { id: 'blackjack', name: '🃏 21 Blackjack' }
 ];
 
@@ -48,6 +43,7 @@ export default function TeacherPortal({
   const [topic, setTopic] = useState('');
   const [level, setLevel] = useState('B1');
   const [gameType, setGameType] = useState('all');
+  const [challengeType, setChallengeType] = useState('random');
   const [questionCount, setQuestionCount] = useState(6);
   const [model, setModel] = useState('openai/gpt-oss-120b');
   const [customInstructions, setCustomInstructions] = useState('');
@@ -61,18 +57,17 @@ export default function TeacherPortal({
   const [generatedPin, setGeneratedPin] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [copiedPin, setCopiedPin] = useState(false);
 
   // Generate with Groq AI
   const handleGenerateAI = async (e) => {
     e.preventDefault();
     if (!topic.trim()) {
-      alert('Please enter a topic for the activity.');
+      alert('Por favor ingresa un tema para la actividad de inglés.');
       return;
     }
 
     if (!groqApiKey) {
-      setAiError('Please configure your Groq API Key first.');
+      setAiError('Por favor configura tu Groq API Key primero en Ajustes.');
       onOpenSettings();
       return;
     }
@@ -88,18 +83,19 @@ export default function TeacherPortal({
         level,
         questionCount: Number(questionCount),
         gameType,
+        challengeType,
         model,
         customInstructions
       });
 
       setActivityTitle(result.title || `Vegas ${topic} Challenge`);
-      setActivityDesc(result.description || `Practice ${topic} with casino games!`);
+      setActivityDesc(result.description || `Práctica de ${topic} con juegos de casino.`);
       setQuestions(result.questions || []);
       setGeneratedPin(generateGamePin());
       sounds.playJackpot();
     } catch (err) {
       console.error(err);
-      setAiError(err.message || 'Failed to generate quiz. Check your API key.');
+      setAiError(err.message || 'Error al generar actividad con Groq.');
       sounds.playWrong();
     } finally {
       setIsGenerating(false);
@@ -110,9 +106,12 @@ export default function TeacherPortal({
   const handleAddQuestion = () => {
     const newQ = {
       id: `q_${Date.now()}`,
+      type: 'multiple_choice',
       question: '',
+      promptInstructions: 'Responde la pregunta o di la frase en voz alta.',
       options: ['', '', '', ''],
       correctAnswer: '',
+      modelAnswer: '',
       explanation: '',
       category: 'Grammar',
       points: 200
@@ -134,7 +133,6 @@ export default function TeacherPortal({
     const oldVal = updated[qIndex].options[optIndex];
     updated[qIndex].options[optIndex] = value;
 
-    // If this option was selected as correct answer, update correctAnswer string too
     if (updated[qIndex].correctAnswer === oldVal) {
       updated[qIndex].correctAnswer = value;
     }
@@ -151,41 +149,34 @@ export default function TeacherPortal({
   // Save activity
   const handleSaveActivity = async () => {
     if (!activityTitle.trim()) {
-      alert('Please provide a title for the activity.');
-      return;
-    }
-    if (questions.length === 0) {
-      alert('Please add at least one question.');
+      alert('Por favor asigna un título a la actividad.');
       return;
     }
 
-    // Verify each question has a valid correct answer
-    for (let i = 0; i < questions.length; i++) {
-      const q = questions[i];
-      if (!q.question.trim()) {
-        alert(`Question #${i + 1} cannot have an empty question prompt.`);
-        return;
-      }
-      if (!q.correctAnswer.trim()) {
-        alert(`Please select the correct answer for question #${i + 1}.`);
-        return;
-      }
+    if (questions.length === 0) {
+      alert('Por favor agrega al menos una pregunta o genera con la IA.');
+      return;
     }
 
     setIsSaving(true);
+    sounds.playChips();
+
     try {
+      const pin = generatedPin || generateGamePin();
       const activityData = {
         title: activityTitle,
         description: activityDesc,
         level,
-        category: topic || 'English',
+        category: topic || 'English Challenge',
         gameType,
-        pin: generatedPin || generateGamePin(),
-        questions: questions
+        challengeType,
+        pin,
+        questions,
+        createdAt: Date.now()
       };
 
       const saved = await saveActivity(activityData);
-      setGeneratedPin(saved.pin);
+      setGeneratedPin(saved.pin || pin);
       setSaveSuccess(true);
       sounds.playJackpot();
 
@@ -195,51 +186,62 @@ export default function TeacherPortal({
 
       setTimeout(() => setSaveSuccess(false), 4000);
     } catch (err) {
-      alert('Error saving activity: ' + err.message);
+      console.error(err);
+      alert('Error guardando la actividad: ' + err.message);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleCopyLink = () => {
-    const url = `${window.location.origin}${window.location.pathname}?pin=${generatedPin}`;
-    navigator.clipboard.writeText(url);
-    setCopiedPin(true);
-    sounds.playCoin();
-    setTimeout(() => setCopiedPin(false), 2500);
+  // Delete activity
+  const handleDeleteActivity = async (activityId) => {
+    if (!confirm('¿Estás seguro de eliminar esta actividad?')) return;
+
+    try {
+      await deleteActivity(activityId);
+      sounds.playTick();
+      if (onActivitySaved) {
+        onActivitySaved();
+      }
+    } catch (err) {
+      alert('Error eliminando la actividad: ' + err.message);
+    }
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-4 animate-fadeIn">
-      {/* Navigation Tabs */}
-      <div className="flex items-center justify-between border-b border-gray-800 pb-4 mb-6">
+    <div className="max-w-5xl mx-auto p-4 md:p-6 animate-fadeIn space-y-6">
+      {/* Top Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-800 pb-4">
         <div>
-          <h2 className="text-2xl font-black text-white flex items-center gap-2">
-            <Bot className="w-7 h-7 text-amber-400" />
-            Teacher Activity Creator
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold uppercase tracking-wider mb-1">
+            <School className="w-3.5 h-3.5 text-amber-400" />
+            Panel Docente • Generador Pedagógico
+          </div>
+          <h2 className="text-2xl font-black text-white">
+            Creación & Configuración de Actividades
           </h2>
           <p className="text-xs text-gray-400">
-            Design English casino challenges with Groq AI or manual creation
+            Diseña retos de inglés con IA Groq (opción múltiple, completar, afirmativo, negativo, preguntas)
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={() => setActiveTab('create')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'create'
-                ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20'
+                ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20 font-black'
                 : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
             }`}
           >
-            <Sparkles className="w-4 h-4" /> AI Generator
+            <Sparkles className="w-4 h-4" /> Generador IA
           </button>
 
           <button
             onClick={() => setActiveTab('manage')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'manage'
-                ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20'
+                ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20 font-black'
                 : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
             }`}
           >
@@ -248,7 +250,7 @@ export default function TeacherPortal({
 
           <button
             onClick={onOpenRosterModal}
-            className="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-gradient-to-r from-purple-900/80 to-indigo-950 border border-purple-500/50 text-purple-200 hover:text-white hover:scale-105"
+            className="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-gradient-to-r from-purple-900/80 to-indigo-950 border border-purple-500/50 text-purple-200 hover:text-white hover:scale-105 cursor-pointer"
             title="Ingresar y gestionar nombres de estudiantes del salón"
           >
             <Users className="w-4 h-4 text-purple-400" />
@@ -261,17 +263,17 @@ export default function TeacherPortal({
       {activeTab === 'create' && (
         <div className="space-y-6">
           {/* AI Generation Box */}
-          <div className="bg-gradient-to-r from-gray-900 via-gray-900 to-amber-950/40 border border-amber-500/40 rounded-2xl p-6 shadow-xl relative">
+          <div className="bg-gradient-to-r from-gray-900 via-gray-900 to-amber-950/40 border border-amber-500/40 rounded-3xl p-6 shadow-xl relative">
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs font-bold text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4" /> Groq AI Instant Activity Generator
+                <Sparkles className="w-4 h-4" /> Generador Inteligente Groq IA
               </span>
               {!groqApiKey && (
                 <button
                   onClick={onOpenSettings}
-                  className="text-xs text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 px-3 py-1 rounded-lg border border-amber-500/40 flex items-center gap-1"
+                  className="text-xs text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 px-3 py-1 rounded-lg border border-amber-500/40 flex items-center gap-1 cursor-pointer"
                 >
-                  <Key className="w-3.5 h-3.5" /> Set Groq API Key
+                  <Key className="w-3.5 h-3.5" /> Configurar Groq API Key
                 </button>
               )}
             </div>
@@ -283,81 +285,100 @@ export default function TeacherPortal({
             )}
 
             <form onSubmit={handleGenerateAI} className="space-y-4">
+              {/* English Topic */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-300 mb-1">
-                    English Topic or Grammar Point *
+                    Tema o Punto Gramatical en Inglés *
                   </label>
                   <input
                     type="text"
                     value={topic}
                     onChange={(e) => setTopic(e.target.value)}
-                    placeholder="e.g. Past Continuous vs Simple Past, Job Interview Idioms..."
+                    placeholder="ej. Past Simple & Irregular Verbs, Daily Routines, Travel, Conditionals..."
                     className="w-full bg-black/60 border border-gray-700 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none"
                     required
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-300 mb-1">
-                      CEFR Level
-                    </label>
-                    <select
-                      value={level}
-                      onChange={(e) => setLevel(e.target.value)}
-                      className="w-full bg-black/60 border border-gray-700 focus:border-amber-400 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none"
-                    >
-                      <option value="A1">A1 Beginner</option>
-                      <option value="A2">A2 Elementary</option>
-                      <option value="B1">B1 Intermediate</option>
-                      <option value="B2">B2 Upper Intermediate</option>
-                      <option value="C1">C1 Advanced</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-gray-300 mb-1">
-                      Target Machine
-                    </label>
-                    <select
-                      value={gameType}
-                      onChange={(e) => setGameType(e.target.value)}
-                      className="w-full bg-black/60 border border-gray-700 focus:border-amber-400 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none"
-                    >
-                      {GAME_TYPES.map(gt => (
-                        <option key={gt.id} value={gt.id}>{gt.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                {/* Challenge Type Selector */}
+                <div>
+                  <label className="block text-xs font-bold text-amber-400 mb-1">
+                    Tipo de Ejercicio / Desafío:
+                  </label>
+                  <select
+                    value={challengeType}
+                    onChange={(e) => setChallengeType(e.target.value)}
+                    className="w-full bg-black/60 border border-amber-500/50 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-xs text-white font-bold focus:outline-none"
+                  >
+                    {CHALLENGE_TYPES.map(ct => (
+                      <option key={ct.id} value={ct.id}>{ct.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* CEFR Level, Target Machine, Question Count */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-300 mb-1">
-                    Number of Questions
+                    Nivel CEFR
                   </label>
                   <select
-                    value={questionCount}
-                    onChange={(e) => setQuestionCount(e.target.value)}
-                    className="w-full bg-black/60 border border-gray-700 focus:border-amber-400 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none"
+                    value={level}
+                    onChange={(e) => setLevel(e.target.value)}
+                    className="w-full bg-black/60 border border-gray-700 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none"
                   >
-                    <option value={4}>4 Questions (Quick Spin)</option>
-                    <option value={6}>6 Questions (Standard)</option>
-                    <option value={8}>8 Questions (Extended)</option>
-                    <option value={10}>10 Questions (High Roller)</option>
+                    <option value="A1">A1 Beginner</option>
+                    <option value="A2">A2 Elementary</option>
+                    <option value="B1">B1 Intermediate</option>
+                    <option value="B2">B2 Upper Intermediate</option>
+                    <option value="C1">C1 Advanced</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-gray-300 mb-1">
-                    Groq Model
+                    Máquina de Casino
+                  </label>
+                  <select
+                    value={gameType}
+                    onChange={(e) => setGameType(e.target.value)}
+                    className="w-full bg-black/60 border border-gray-700 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none"
+                  >
+                    {GAME_TYPES.map(gt => (
+                      <option key={gt.id} value={gt.id}>{gt.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 mb-1">
+                    Cantidad de Desafíos
+                  </label>
+                  <select
+                    value={questionCount}
+                    onChange={(e) => setQuestionCount(e.target.value)}
+                    className="w-full bg-black/60 border border-gray-700 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none"
+                  >
+                    <option value={4}>4 Preguntas (Partida Rápida)</option>
+                    <option value={6}>6 Preguntas (Estándar)</option>
+                    <option value={8}>8 Preguntas (Extendido)</option>
+                    <option value={10}>10 Preguntas (Gran Casino)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Model and Custom Notes */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 mb-1">
+                    Modelo de Groq IA
                   </label>
                   <select
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
-                    className="w-full bg-black/60 border border-gray-700 focus:border-amber-400 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none"
+                    className="w-full bg-black/60 border border-gray-700 focus:border-amber-400 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none"
                   >
                     {GROQ_MODELS.map(m => (
                       <option key={m.id} value={m.id}>{m.name}</option>
@@ -367,50 +388,50 @@ export default function TeacherPortal({
 
                 <div>
                   <label className="block text-xs font-bold text-gray-300 mb-1">
-                    Specific Focus (Optional)
+                    Instrucciones Especiales del Docente (Opcional)
                   </label>
                   <input
                     type="text"
                     value={customInstructions}
                     onChange={(e) => setCustomInstructions(e.target.value)}
-                    placeholder="e.g. emphasize false friends or British vs US"
-                    className="w-full bg-black/60 border border-gray-700 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none"
+                    placeholder="ej. Enfatizar verbos irregulares comunes, usar vocabulario de viajes..."
+                    className="w-full bg-black/60 border border-gray-700 focus:border-amber-400 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end pt-2">
+              <div className="pt-2 flex justify-end">
                 <button
                   type="submit"
                   disabled={isGenerating}
-                  className="px-6 py-3 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-gray-950 font-black text-sm uppercase rounded-xl shadow-lg shadow-amber-500/20 hover:scale-105 active:scale-95 transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                  className="px-6 py-3 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 text-gray-950 font-black text-sm rounded-xl shadow-lg shadow-amber-500/20 transition transform hover:scale-105 active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
                 >
-                  <Sparkles className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
-                  {isGenerating ? 'Generating with Groq AI...' : 'Generate Casino Activity'}
+                  <Sparkles className="w-4 h-4" />
+                  <span>{isGenerating ? 'Generando Actividad con Groq...' : '⚡ Generar Actividad con IA'}</span>
                 </button>
               </div>
             </form>
           </div>
 
-          {/* Activity Editor & Review */}
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl space-y-6">
+          {/* Activity Review & Manual Customization Section */}
+          <div className="bg-gray-900/60 border border-gray-800 rounded-3xl p-6 space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-800 pb-4">
               <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <h3 className="text-lg font-black text-white flex items-center gap-2">
                   <BookOpen className="w-5 h-5 text-amber-400" />
-                  Activity Details & Questions ({questions.length})
+                  Detalles y Desafíos de la Actividad ({questions.length})
                 </h3>
                 <p className="text-xs text-gray-400">
-                  Review and customize before sharing with students
+                  Revisa, personaliza o agrega preguntas antes de jugar en clase
                 </p>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleAddQuestion}
-                  className="px-3.5 py-2 bg-gray-800 hover:bg-gray-700 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+                  className="px-3.5 py-2 bg-gray-800 hover:bg-gray-700 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
                 >
-                  <Plus className="w-4 h-4" /> Add Question
+                  <Plus className="w-4 h-4" /> Agregar Desafío
                 </button>
 
                 <button
@@ -419,141 +440,174 @@ export default function TeacherPortal({
                   className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-lg shadow-emerald-600/20 disabled:opacity-50 cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
-                  {isSaving ? 'Saving...' : 'Save & Publish'}
+                  {isSaving ? 'Guardando...' : 'Guardar Actividad'}
                 </button>
               </div>
             </div>
+
+            {saveSuccess && (
+              <div className="p-3 bg-emerald-950/80 border border-emerald-500 text-emerald-200 text-xs font-bold rounded-xl animate-fadeIn flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-400" />
+                ¡Actividad guardada exitosamente! Ya está lista para ser jugada en el proyector.
+              </div>
+            )}
 
             {/* Title & Description */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-gray-300 mb-1">
-                  Activity Title
+                  Título de la Actividad
                 </label>
                 <input
                   type="text"
                   value={activityTitle}
                   onChange={(e) => setActivityTitle(e.target.value)}
-                  placeholder="e.g. Vegas Irregular Verbs Bonanza"
+                  placeholder="ej. Las Vegas Irregular Verbs Jackpot"
                   className="w-full bg-black/60 border border-gray-700 focus:border-amber-400 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-gray-300 mb-1">
-                  Activity Description
+                  Descripción o Instrucción
                 </label>
                 <input
                   type="text"
                   value={activityDesc}
                   onChange={(e) => setActivityDesc(e.target.value)}
-                  placeholder="Short summary for your students"
+                  placeholder="ej. Practica el pasado simple y participios con la ruleta y las tragaperras"
                   className="w-full bg-black/60 border border-gray-700 focus:border-amber-400 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none"
                 />
               </div>
             </div>
 
-            {/* Generated PIN Share Banner */}
-            {generatedPin && (
-              <div className="p-4 bg-amber-500/10 border-2 border-amber-500/50 rounded-2xl flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="px-3.5 py-1.5 bg-black/80 border border-amber-400 rounded-xl">
-                    <span className="text-xs text-gray-400 block font-semibold">ROOM PIN</span>
-                    <span className="text-xl font-black text-amber-300 tracking-widest">{generatedPin}</span>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-white">Direct Game Link Available</p>
-                    <p className="text-[11px] text-gray-400">Students can join using this PIN or clicking the link</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleCopyLink}
-                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-gray-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow transition"
-                  >
-                    {copiedPin ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copiedPin ? 'Link Copied!' : 'Copy Share Link'}
-                  </button>
-
-                  <button
-                    onClick={() => onPlayActivity && onPlayActivity({
-                      title: activityTitle,
-                      description: activityDesc,
-                      pin: generatedPin,
-                      gameType,
-                      questions
-                    })}
-                    className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-xl flex items-center gap-1.5 transition"
-                  >
-                    <Play className="w-3.5 h-3.5" /> Test Play
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* Questions List */}
             {questions.length === 0 ? (
               <div className="text-center py-12 border-2 border-dashed border-gray-800 rounded-2xl">
-                <p className="text-gray-500 text-sm mb-2">No questions yet.</p>
-                <p className="text-xs text-gray-600">Use the Groq AI Generator above or click "Add Question" to begin.</p>
+                <FileQuestion className="w-10 h-10 text-gray-600 mx-auto mb-2" />
+                <p className="text-gray-400 text-sm font-semibold mb-1">No hay preguntas cargadas todavía.</p>
+                <p className="text-xs text-gray-500">
+                  Usa el Generador de IA arriba o haz clic en "Agregar Desafío" para redactar manualmente.
+                </p>
               </div>
             ) : (
               <div className="space-y-4">
                 {questions.map((q, qIdx) => (
-                  <div key={q.id || qIdx} className="bg-black/40 border border-gray-800 rounded-xl p-4 relative group">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
-                        #{qIdx + 1} Question
-                      </span>
-                      <button
-                        onClick={() => handleDeleteQuestion(qIdx)}
-                        className="text-gray-500 hover:text-red-400 p-1 transition"
-                        title="Remove question"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                    <div key={q.id || qIdx} className="bg-black/50 border border-gray-800 rounded-2xl p-4 relative group space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800/80 pb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
+                            #{qIdx + 1} Desafío
+                          </span>
 
-                    <input
-                      type="text"
-                      value={q.question}
-                      onChange={(e) => handleUpdateQuestion(qIdx, 'question', e.target.value)}
-                      placeholder="Question prompt..."
-                      className="w-full bg-gray-900 border border-gray-700 focus:border-amber-400 rounded-lg px-3 py-2 text-sm text-white mb-3"
-                    />
+                          {/* Question Type Selector */}
+                          <select
+                            value={q.type || 'multiple_choice'}
+                            onChange={(e) => handleUpdateQuestion(qIdx, 'type', e.target.value)}
+                            className="bg-gray-900 border border-gray-700 text-xs text-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-amber-400"
+                          >
+                            <option value="multiple_choice">📝 Opción Múltiple</option>
+                            <option value="fill_blank">✏️ Completar Espacios</option>
+                            <option value="sentence_affirmative">➕ Frase Afirmativa</option>
+                            <option value="sentence_negative">➖ Frase Negativa</option>
+                            <option value="sentence_question">❓ Formular Pregunta</option>
+                          </select>
+                        </div>
 
-                    {/* Options Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
-                      {q.options.map((opt, optIdx) => (
-                        <div key={optIdx} className="flex items-center gap-2 bg-gray-900/60 p-2 rounded-lg border border-gray-800">
-                          <input
-                            type="radio"
-                            name={`correct_${qIdx}`}
-                            checked={q.correctAnswer === opt && opt !== ''}
-                            onChange={() => handleUpdateQuestion(qIdx, 'correctAnswer', opt)}
-                            title="Mark as correct answer"
-                            className="text-amber-500 focus:ring-amber-400"
-                          />
+                        <button
+                          onClick={() => handleDeleteQuestion(qIdx)}
+                          className="text-gray-500 hover:text-red-400 p-1 transition"
+                          title="Eliminar desafío"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Prompt / Question Text */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-400 mb-1">
+                          Pregunta o Claves en Inglés:
+                        </label>
+                        <input
+                          type="text"
+                          value={q.question}
+                          onChange={(e) => handleUpdateQuestion(qIdx, 'question', e.target.value)}
+                          placeholder="ej. She ____ (go) to Paris last summer. O [we / visit / friends]"
+                          className="w-full bg-gray-900 border border-gray-700 focus:border-amber-400 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                        />
+                      </div>
+
+                      {/* Instructions for Student */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-400 mb-1">
+                          Instrucción para el Alumno (en español):
+                        </label>
+                        <input
+                          type="text"
+                          value={q.promptInstructions || ''}
+                          onChange={(e) => handleUpdateQuestion(qIdx, 'promptInstructions', e.target.value)}
+                          placeholder="ej. Di en voz alta una oración afirmativa en pasado simple con:"
+                          className="w-full bg-gray-900 border border-gray-700 focus:border-amber-400 rounded-xl px-3 py-1.5 text-xs text-gray-200 focus:outline-none"
+                        />
+                      </div>
+
+                      {/* If multiple choice: Options */}
+                      {q.options && q.options.length >= 2 && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                          {q.options.map((opt, optIdx) => (
+                            <div key={optIdx} className="flex items-center gap-2 bg-gray-900/60 p-2 rounded-xl border border-gray-800">
+                              <input
+                                type="radio"
+                                name={`correct_${qIdx}`}
+                                checked={q.correctAnswer === opt && opt !== ''}
+                                onChange={() => handleUpdateQuestion(qIdx, 'correctAnswer', opt)}
+                                className="accent-emerald-500 cursor-pointer"
+                                title="Marcar como respuesta correcta"
+                              />
+                              <input
+                                type="text"
+                                value={opt}
+                                onChange={(e) => handleUpdateOption(qIdx, optIdx, e.target.value)}
+                                placeholder={`Opción ${String.fromCharCode(65 + optIdx)}`}
+                                className="flex-1 bg-transparent text-xs text-white focus:outline-none"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Model Answer for Oral Challenges */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                        <div>
+                          <label className="block text-[11px] font-bold text-emerald-400 mb-1">
+                            Respuesta / Frase Modelo Esperada:
+                          </label>
                           <input
                             type="text"
-                            value={opt}
-                            onChange={(e) => handleUpdateOption(qIdx, optIdx, e.target.value)}
-                            placeholder={`Option ${String.fromCharCode(65 + optIdx)}`}
-                            className="w-full bg-transparent text-xs text-gray-200 focus:outline-none"
+                            value={q.modelAnswer || q.correctAnswer || ''}
+                            onChange={(e) => {
+                              handleUpdateQuestion(qIdx, 'modelAnswer', e.target.value);
+                              handleUpdateQuestion(qIdx, 'correctAnswer', e.target.value);
+                            }}
+                            placeholder="ej. She went to Paris last summer."
+                            className="w-full bg-emerald-950/30 border border-emerald-500/40 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none"
                           />
                         </div>
-                      ))}
-                    </div>
 
-                    <input
-                      type="text"
-                      value={q.explanation || ''}
-                      onChange={(e) => handleUpdateQuestion(qIdx, 'explanation', e.target.value)}
-                      placeholder="Educational explanation (revealed after student answers)..."
-                      className="w-full bg-gray-900 border border-gray-800 focus:border-amber-400 rounded-lg px-3 py-1.5 text-xs text-gray-300"
-                    />
-                  </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-gray-400 mb-1">
+                            Regla / Explicación Educativa:
+                          </label>
+                          <input
+                            type="text"
+                            value={q.explanation || ''}
+                            onChange={(e) => handleUpdateQuestion(qIdx, 'explanation', e.target.value)}
+                            placeholder="ej. 'Go' es un verbo irregular cuyo pasado simple es 'went'."
+                            className="w-full bg-gray-900 border border-gray-700 focus:border-amber-400 rounded-xl px-3 py-1.5 text-xs text-gray-300 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
                 ))}
               </div>
             )}
@@ -564,48 +618,48 @@ export default function TeacherPortal({
       {/* Tab: Manage Activities */}
       {activeTab === 'manage' && (
         <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-white">Actividades Disponibles</h3>
+            <span className="text-xs text-gray-400">Total: {activities.length} actividades</span>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {activities.map((act) => (
               <div
                 key={act.id}
-                className="bg-gray-900 border border-gray-800 hover:border-amber-500/40 rounded-2xl p-5 shadow-lg flex flex-col justify-between transition"
+                className="bg-black/40 border border-gray-800 hover:border-amber-500/40 rounded-2xl p-5 shadow-lg transition flex flex-col justify-between"
               >
                 <div>
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase">
-                      PIN: {act.pin}
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      Nivel {act.level || 'B1'}
                     </span>
-                    <span className="text-[11px] text-gray-400 font-semibold">
-                      {act.questions?.length || 0} Questions
+                    <span className="text-[10px] text-gray-400 font-mono">
+                      {act.questions?.length || 0} preguntas
                     </span>
                   </div>
 
-                  <h4 className="text-base font-bold text-white mb-1">{act.title}</h4>
-                  <p className="text-xs text-gray-400 mb-4 line-clamp-2">{act.description}</p>
+                  <h4 className="text-base font-black text-white mb-1">{act.title}</h4>
+                  <p className="text-xs text-gray-400 leading-relaxed mb-4">{act.description}</p>
                 </div>
 
-                <div className="flex items-center justify-between pt-3 border-t border-gray-800">
-                  <span className="text-[11px] text-gray-500 uppercase font-semibold">
-                    {act.level || 'All levels'}
+                <div className="pt-3 border-t border-gray-800/80 flex items-center justify-between">
+                  <span className="text-[11px] text-gray-400">
+                    Máquina: <strong>{act.gameType || 'Todas'}</strong>
                   </span>
 
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => onPlayActivity && onPlayActivity(act)}
-                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded-lg flex items-center gap-1 shadow transition"
+                      className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-bold text-xs rounded-xl shadow transition hover:scale-105 cursor-pointer flex items-center gap-1"
                     >
-                      <Play className="w-3.5 h-3.5" /> Play
+                      <Play className="w-3.5 h-3.5" /> Jugar
                     </button>
 
                     <button
-                      onClick={async () => {
-                        if (confirm(`Delete activity "${act.title}"?`)) {
-                          await deleteActivity(act.id);
-                          if (onActivitySaved) onActivitySaved(null);
-                        }
-                      }}
-                      className="p-1.5 text-gray-500 hover:text-red-400 transition"
-                      title="Delete activity"
+                      onClick={() => handleDeleteActivity(act.id)}
+                      className="p-1.5 text-gray-500 hover:text-red-400 transition cursor-pointer"
+                      title="Eliminar actividad"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
