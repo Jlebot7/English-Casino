@@ -13,7 +13,9 @@ import {
   Copy, 
   BookOpen, 
   Settings as SettingsIcon,
-  Bot
+  Bot,
+  Users,
+  School
 } from 'lucide-react';
 import { generateEnglishQuiz, GROQ_MODELS } from '../services/groqService';
 import { saveActivity, deleteActivity, generateGamePin } from '../services/firebaseService';
@@ -33,9 +35,13 @@ export default function TeacherPortal({
   onActivitySaved,
   onPlayActivity,
   onOpenSettings,
+  classrooms = [],
+  activeClassroomId,
+  onSelectClassroom,
   students = [],
   onOpenRosterModal
 }) {
+  const currentClassroom = classrooms.find(c => c.id === activeClassroomId) || classrooms[0];
   const [activeTab, setActiveTab] = useState('create'); // 'create' | 'manage'
 
   // AI Generator Form State
