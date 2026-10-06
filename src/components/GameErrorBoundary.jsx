@@ -62,3 +62,4 @@ export default class GameErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
+
