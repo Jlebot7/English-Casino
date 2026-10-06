@@ -14,6 +14,7 @@ import BlackjackGame from './components/games/BlackjackGame';
 import PlinkoGame from './components/games/PlinkoGame';
 import CrashRocketGame from './components/games/CrashRocketGame';
 import MinesGame from './components/games/MinesGame';
+import GameErrorBoundary from './components/GameErrorBoundary';
 
 import { DEFAULT_ACTIVITIES } from './data/defaultActivities';
 import { 
@@ -635,89 +636,91 @@ export default function App() {
               onGenerateTurnQuestion={handleGenerateTurnQuestion}
             />
 
-            {activeGameMachine === 'slots' && (
-              <SlotsGame
-                activity={currentActivity}
-                chips={chips}
-                onUpdateChips={handleUpdateChips}
-                onFinishGame={handleFinishGame}
-                onBackToLobby={() => setCurrentView('lobby')}
-                activeStudent={activeStudent}
-                onRecordStudentScore={handleRecordStudentScore}
-                onAdvanceStudentTurn={handleNextStudent}
-                onGenerateTurnQuestion={handleGenerateTurnQuestion}
-              />
-            )}
+            <GameErrorBoundary onBackToLobby={() => setCurrentView('lobby')}>
+              {activeGameMachine === 'slots' && (
+                <SlotsGame
+                  activity={currentActivity}
+                  chips={chips}
+                  onUpdateChips={handleUpdateChips}
+                  onFinishGame={handleFinishGame}
+                  onBackToLobby={() => setCurrentView('lobby')}
+                  activeStudent={activeStudent}
+                  onRecordStudentScore={handleRecordStudentScore}
+                  onAdvanceStudentTurn={handleNextStudent}
+                  onGenerateTurnQuestion={handleGenerateTurnQuestion}
+                />
+              )}
 
-            {activeGameMachine === 'roulette' && (
-              <RouletteGame
-                activity={currentActivity}
-                chips={chips}
-                onUpdateChips={handleUpdateChips}
-                onFinishGame={handleFinishGame}
-                onBackToLobby={() => setCurrentView('lobby')}
-                activeStudent={activeStudent}
-                onRecordStudentScore={handleRecordStudentScore}
-                onAdvanceStudentTurn={handleNextStudent}
-                onGenerateTurnQuestion={handleGenerateTurnQuestion}
-              />
-            )}
+              {activeGameMachine === 'roulette' && (
+                <RouletteGame
+                  activity={currentActivity}
+                  chips={chips}
+                  onUpdateChips={handleUpdateChips}
+                  onFinishGame={handleFinishGame}
+                  onBackToLobby={() => setCurrentView('lobby')}
+                  activeStudent={activeStudent}
+                  onRecordStudentScore={handleRecordStudentScore}
+                  onAdvanceStudentTurn={handleNextStudent}
+                  onGenerateTurnQuestion={handleGenerateTurnQuestion}
+                />
+              )}
 
-            {activeGameMachine === 'blackjack' && (
-              <BlackjackGame
-                activity={currentActivity}
-                chips={chips}
-                onUpdateChips={handleUpdateChips}
-                onFinishGame={handleFinishGame}
-                onBackToLobby={() => setCurrentView('lobby')}
-                activeStudent={activeStudent}
-                onRecordStudentScore={handleRecordStudentScore}
-                onAdvanceStudentTurn={handleNextStudent}
-                onGenerateTurnQuestion={handleGenerateTurnQuestion}
-              />
-            )}
+              {activeGameMachine === 'blackjack' && (
+                <BlackjackGame
+                  activity={currentActivity}
+                  chips={chips}
+                  onUpdateChips={handleUpdateChips}
+                  onFinishGame={handleFinishGame}
+                  onBackToLobby={() => setCurrentView('lobby')}
+                  activeStudent={activeStudent}
+                  onRecordStudentScore={handleRecordStudentScore}
+                  onAdvanceStudentTurn={handleNextStudent}
+                  onGenerateTurnQuestion={handleGenerateTurnQuestion}
+                />
+              )}
 
-            {activeGameMachine === 'plinko' && (
-              <PlinkoGame
-                activity={currentActivity}
-                chips={chips}
-                onUpdateChips={handleUpdateChips}
-                onFinishGame={handleFinishGame}
-                onBackToLobby={() => setCurrentView('lobby')}
-                activeStudent={activeStudent}
-                onRecordStudentScore={handleRecordStudentScore}
-                onAdvanceStudentTurn={handleNextStudent}
-                onGenerateTurnQuestion={handleGenerateTurnQuestion}
-              />
-            )}
+              {activeGameMachine === 'plinko' && (
+                <PlinkoGame
+                  activity={currentActivity}
+                  chips={chips}
+                  onUpdateChips={handleUpdateChips}
+                  onFinishGame={handleFinishGame}
+                  onBackToLobby={() => setCurrentView('lobby')}
+                  activeStudent={activeStudent}
+                  onRecordStudentScore={handleRecordStudentScore}
+                  onAdvanceStudentTurn={handleNextStudent}
+                  onGenerateTurnQuestion={handleGenerateTurnQuestion}
+                />
+              )}
 
-            {activeGameMachine === 'crash' && (
-              <CrashRocketGame
-                activity={currentActivity}
-                chips={chips}
-                onUpdateChips={handleUpdateChips}
-                onFinishGame={handleFinishGame}
-                onBackToLobby={() => setCurrentView('lobby')}
-                activeStudent={activeStudent}
-                onRecordStudentScore={handleRecordStudentScore}
-                onAdvanceStudentTurn={handleNextStudent}
-                onGenerateTurnQuestion={handleGenerateTurnQuestion}
-              />
-            )}
+              {activeGameMachine === 'crash' && (
+                <CrashRocketGame
+                  activity={currentActivity}
+                  chips={chips}
+                  onUpdateChips={handleUpdateChips}
+                  onFinishGame={handleFinishGame}
+                  onBackToLobby={() => setCurrentView('lobby')}
+                  activeStudent={activeStudent}
+                  onRecordStudentScore={handleRecordStudentScore}
+                  onAdvanceStudentTurn={handleNextStudent}
+                  onGenerateTurnQuestion={handleGenerateTurnQuestion}
+                />
+              )}
 
-            {activeGameMachine === 'mines' && (
-              <MinesGame
-                activity={currentActivity}
-                chips={chips}
-                onUpdateChips={handleUpdateChips}
-                onFinishGame={handleFinishGame}
-                onBackToLobby={() => setCurrentView('lobby')}
-                activeStudent={activeStudent}
-                onRecordStudentScore={handleRecordStudentScore}
-                onAdvanceStudentTurn={handleNextStudent}
-                onGenerateTurnQuestion={handleGenerateTurnQuestion}
-              />
-            )}
+              {activeGameMachine === 'mines' && (
+                <MinesGame
+                  activity={currentActivity}
+                  chips={chips}
+                  onUpdateChips={handleUpdateChips}
+                  onFinishGame={handleFinishGame}
+                  onBackToLobby={() => setCurrentView('lobby')}
+                  activeStudent={activeStudent}
+                  onRecordStudentScore={handleRecordStudentScore}
+                  onAdvanceStudentTurn={handleNextStudent}
+                  onGenerateTurnQuestion={handleGenerateTurnQuestion}
+                />
+              )}
+            </GameErrorBoundary>
           </div>
         )}
       </main>
