@@ -285,9 +285,9 @@ export default function StudentLobby({
               sounds.playTick();
               onOpenSpinner();
             }}
-            className="p-12 bg-gradient-to-b from-gray-900/80 via-black to-gray-950 border-2 border-dashed border-gray-700 hover:border-purple-500/60 rounded-3xl text-center space-y-4 shadow-2xl transition cursor-pointer group"
+            className="p-12 bg-gradient-to-b from-gray-900/90 via-black to-gray-950 border-2 border-dashed border-gray-700 hover:border-purple-500/60 rounded-3xl text-center space-y-4 cabinet-3d-shadow transition-all duration-300 cursor-pointer group hover:scale-[1.01]"
           >
-            <div className="w-20 h-20 rounded-3xl bg-purple-950/60 border-2 border-purple-500/50 mx-auto flex items-center justify-center text-4xl shadow-lg shadow-purple-950/60 group-hover:scale-110 transition">
+            <div className="w-20 h-20 rounded-3xl bg-purple-950/60 border-2 border-purple-500/50 mx-auto flex items-center justify-center text-4xl shadow-lg shadow-purple-950/60 group-hover:scale-110 transition duration-300">
               <Lock className="w-10 h-10 text-yellow-400" />
             </div>
             <h3 className="text-xl font-black text-white">
@@ -297,22 +297,23 @@ export default function StudentLobby({
               Para garantizar que cada alumno tenga su oportunidad justa de jugar, primero debes presionar <strong>"GIRAR RULETA DE ALUMNOS"</strong> arriba. Una vez caiga la bolita en un estudiante, el salón accederá a las 6 máquinas.
             </p>
             <div>
-              <span className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs shadow-lg transition">
+              <span className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs cabinet-3d-shadow transition transform hover:scale-105 active:scale-95">
                 <Disc3 className="w-4 h-4 text-yellow-300 animate-spin" />
                 Girar Ruleta Ahora
               </span>
             </div>
           </div>
         ) : (
-          /* UNLOCKED: 6 CASINO MACHINES GRID */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 animate-fadeIn">
+          /* UNLOCKED: 6 CASINO MACHINES GRID IN 3D STAGE */
+          <div className="casino-3d-stage grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fadeIn">
             {/* 1. Lucky Slots */}
             <div
               onClick={() => handleLaunchMachine('slots')}
-              className="bg-gradient-to-b from-red-950/40 via-gray-900 to-black border-2 border-red-500/50 hover:border-red-400 rounded-3xl p-6 shadow-xl transition-all transform hover:scale-[1.03] cursor-pointer group flex flex-col justify-between"
+              className="bg-gradient-to-b from-red-950/50 via-gray-900 to-black border-2 border-red-500/50 hover:border-red-400 rounded-3xl p-6 cabinet-3d-shadow transition-all duration-300 transform hover:-translate-y-2 hover:rotate-1 hover:scale-[1.02] cursor-pointer group flex flex-col justify-between"
+              style={{ transformStyle: 'preserve-3d' }}
             >
               <div>
-                <div className="w-14 h-14 rounded-2xl bg-red-600/20 border border-red-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition">
+                <div className="w-14 h-14 rounded-2xl bg-red-600/20 border border-red-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition duration-300 shadow-md">
                   🎰
                 </div>
                 <h4 className="text-lg font-black text-white mb-1 group-hover:text-red-300 transition">
@@ -327,7 +328,7 @@ export default function StudentLobby({
                 <span className="text-[11px] font-bold text-red-400 uppercase tracking-wider">
                   Exoneración: Coincidencia
                 </span>
-                <span className="px-3 py-1.5 rounded-xl bg-red-600 text-white font-bold text-xs flex items-center gap-1 group-hover:bg-red-500 transition">
+                <span className="px-3 py-1.5 rounded-xl bg-red-600 text-white font-bold text-xs flex items-center gap-1 group-hover:bg-red-500 transition shadow-md">
                   Jugar <ArrowRight className="w-3.5 h-3.5" />
                 </span>
               </div>
@@ -336,10 +337,11 @@ export default function StudentLobby({
             {/* 2. Vegas Roulette (European 37 numbers & 2/3 criteria) */}
             <div
               onClick={() => handleLaunchMachine('roulette')}
-              className="bg-gradient-to-b from-blue-950/40 via-gray-900 to-black border-2 border-blue-500/50 hover:border-blue-400 rounded-3xl p-6 shadow-xl transition-all transform hover:scale-[1.03] cursor-pointer group flex flex-col justify-between"
+              className="bg-gradient-to-b from-blue-950/50 via-gray-900 to-black border-2 border-blue-500/50 hover:border-blue-400 rounded-3xl p-6 cabinet-3d-shadow transition-all duration-300 transform hover:-translate-y-2 hover:rotate-1 hover:scale-[1.02] cursor-pointer group flex flex-col justify-between"
+              style={{ transformStyle: 'preserve-3d' }}
             >
               <div>
-                <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition">
+                <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition duration-300 shadow-md">
                   🎡
                 </div>
                 <h4 className="text-lg font-black text-white mb-1 group-hover:text-blue-300 transition">
@@ -354,7 +356,7 @@ export default function StudentLobby({
                 <span className="text-[11px] font-bold text-blue-400 uppercase tracking-wider">
                   Exoneración: 2 de 3 Aciertos
                 </span>
-                <span className="px-3 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center gap-1 group-hover:bg-blue-500 transition">
+                <span className="px-3 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center gap-1 group-hover:bg-blue-500 transition shadow-md">
                   Jugar <ArrowRight className="w-3.5 h-3.5" />
                 </span>
               </div>
@@ -363,10 +365,11 @@ export default function StudentLobby({
             {/* 3. Blackjack */}
             <div
               onClick={() => handleLaunchMachine('blackjack')}
-              className="bg-gradient-to-b from-emerald-950/40 via-gray-900 to-black border-2 border-emerald-500/50 hover:border-emerald-400 rounded-3xl p-6 shadow-xl transition-all transform hover:scale-[1.03] cursor-pointer group flex flex-col justify-between"
+              className="bg-gradient-to-b from-emerald-950/50 via-gray-900 to-black border-2 border-emerald-500/50 hover:border-emerald-400 rounded-3xl p-6 cabinet-3d-shadow transition-all duration-300 transform hover:-translate-y-2 hover:rotate-1 hover:scale-[1.02] cursor-pointer group flex flex-col justify-between"
+              style={{ transformStyle: 'preserve-3d' }}
             >
               <div>
-                <div className="w-14 h-14 rounded-2xl bg-emerald-600/20 border border-emerald-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-600/20 border border-emerald-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition duration-300 shadow-md">
                   🃏
                 </div>
                 <h4 className="text-lg font-black text-white mb-1 group-hover:text-emerald-300 transition">
@@ -381,7 +384,7 @@ export default function StudentLobby({
                 <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
                   Exoneración: Vencer Crupier
                 </span>
-                <span className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs flex items-center gap-1 group-hover:bg-emerald-500 transition">
+                <span className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs flex items-center gap-1 group-hover:bg-emerald-500 transition shadow-md">
                   Jugar <ArrowRight className="w-3.5 h-3.5" />
                 </span>
               </div>
@@ -390,10 +393,11 @@ export default function StudentLobby({
             {/* 4. Plinko Pyramid */}
             <div
               onClick={() => handleLaunchMachine('plinko')}
-              className="bg-gradient-to-b from-amber-950/40 via-gray-900 to-black border-2 border-amber-500/50 hover:border-amber-400 rounded-3xl p-6 shadow-xl transition-all transform hover:scale-[1.03] cursor-pointer group flex flex-col justify-between"
+              className="bg-gradient-to-b from-amber-950/50 via-gray-900 to-black border-2 border-amber-500/50 hover:border-amber-400 rounded-3xl p-6 cabinet-3d-shadow transition-all duration-300 transform hover:-translate-y-2 hover:rotate-1 hover:scale-[1.02] cursor-pointer group flex flex-col justify-between"
+              style={{ transformStyle: 'preserve-3d' }}
             >
               <div>
-                <div className="w-14 h-14 rounded-2xl bg-amber-600/20 border border-amber-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition">
+                <div className="w-14 h-14 rounded-2xl bg-amber-600/20 border border-amber-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition duration-300 shadow-md">
                   🟢
                 </div>
                 <h4 className="text-lg font-black text-white mb-1 group-hover:text-amber-300 transition">
@@ -408,7 +412,7 @@ export default function StudentLobby({
                 <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">
                   Exoneración: Multiplicador &ge; 1.5x
                 </span>
-                <span className="px-3 py-1.5 rounded-xl bg-amber-600 text-black font-black text-xs flex items-center gap-1 group-hover:bg-amber-500 transition">
+                <span className="px-3 py-1.5 rounded-xl bg-amber-600 text-black font-black text-xs flex items-center gap-1 group-hover:bg-amber-500 transition shadow-md">
                   Jugar <ArrowRight className="w-3.5 h-3.5" />
                 </span>
               </div>
@@ -417,10 +421,11 @@ export default function StudentLobby({
             {/* 5. Lucky Rocket (Crash) */}
             <div
               onClick={() => handleLaunchMachine('crash')}
-              className="bg-gradient-to-b from-sky-950/40 via-gray-900 to-black border-2 border-sky-500/50 hover:border-sky-400 rounded-3xl p-6 shadow-xl transition-all transform hover:scale-[1.03] cursor-pointer group flex flex-col justify-between"
+              className="bg-gradient-to-b from-sky-950/50 via-gray-900 to-black border-2 border-sky-500/50 hover:border-sky-400 rounded-3xl p-6 cabinet-3d-shadow transition-all duration-300 transform hover:-translate-y-2 hover:rotate-1 hover:scale-[1.02] cursor-pointer group flex flex-col justify-between"
+              style={{ transformStyle: 'preserve-3d' }}
             >
               <div>
-                <div className="w-14 h-14 rounded-2xl bg-sky-600/20 border border-sky-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition">
+                <div className="w-14 h-14 rounded-2xl bg-sky-600/20 border border-sky-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition duration-300 shadow-md">
                   🚀
                 </div>
                 <h4 className="text-lg font-black text-white mb-1 group-hover:text-sky-300 transition">
@@ -435,7 +440,7 @@ export default function StudentLobby({
                 <span className="text-[11px] font-bold text-sky-400 uppercase tracking-wider">
                   Exoneración: Retiro a Tiempo
                 </span>
-                <span className="px-3 py-1.5 rounded-xl bg-sky-600 text-white font-bold text-xs flex items-center gap-1 group-hover:bg-sky-500 transition">
+                <span className="px-3 py-1.5 rounded-xl bg-sky-600 text-white font-bold text-xs flex items-center gap-1 group-hover:bg-sky-500 transition shadow-md">
                   Jugar <ArrowRight className="w-3.5 h-3.5" />
                 </span>
               </div>
@@ -444,10 +449,11 @@ export default function StudentLobby({
             {/* 6. Casino Mines */}
             <div
               onClick={() => handleLaunchMachine('mines')}
-              className="bg-gradient-to-b from-teal-950/40 via-gray-900 to-black border-2 border-teal-500/50 hover:border-teal-400 rounded-3xl p-6 shadow-xl transition-all transform hover:scale-[1.03] cursor-pointer group flex flex-col justify-between"
+              className="bg-gradient-to-b from-teal-950/50 via-gray-900 to-black border-2 border-teal-500/50 hover:border-teal-400 rounded-3xl p-6 cabinet-3d-shadow transition-all duration-300 transform hover:-translate-y-2 hover:rotate-1 hover:scale-[1.02] cursor-pointer group flex flex-col justify-between"
+              style={{ transformStyle: 'preserve-3d' }}
             >
               <div>
-                <div className="w-14 h-14 rounded-2xl bg-teal-600/20 border border-teal-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition">
+                <div className="w-14 h-14 rounded-2xl bg-teal-600/20 border border-teal-500/50 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition duration-300 shadow-md">
                   💣
                 </div>
                 <h4 className="text-lg font-black text-white mb-1 group-hover:text-teal-300 transition">
@@ -462,7 +468,7 @@ export default function StudentLobby({
                 <span className="text-[11px] font-bold text-teal-400 uppercase tracking-wider">
                   Exoneración: &ge; 2 Gemas Sin Mina
                 </span>
-                <span className="px-3 py-1.5 rounded-xl bg-teal-600 text-white font-bold text-xs flex items-center gap-1 group-hover:bg-teal-500 transition">
+                <span className="px-3 py-1.5 rounded-xl bg-teal-600 text-white font-bold text-xs flex items-center gap-1 group-hover:bg-teal-500 transition shadow-md">
                   Jugar <ArrowRight className="w-3.5 h-3.5" />
                 </span>
               </div>

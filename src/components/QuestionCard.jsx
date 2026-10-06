@@ -73,7 +73,7 @@ export default function QuestionCard({
   const isCorrectAnswer = selectedOption === question.correctAnswer || selectedOption === 'Correcto';
 
   return (
-    <div className="bg-gradient-to-b from-gray-900 via-gray-900 to-black border-2 border-amber-500/50 rounded-3xl p-5 md:p-6 shadow-2xl relative overflow-hidden backdrop-blur-md animate-fadeIn">
+    <div className="bg-gradient-to-b from-gray-900 via-gray-900 to-black border-2 border-amber-500/50 rounded-3xl p-5 md:p-6 cabinet-3d-shadow relative overflow-hidden backdrop-blur-md animate-fadeIn">
       {/* Golden Vegas Glow */}
       <div className="absolute -top-12 -right-12 w-40 h-40 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-12 -left-12 w-40 h-40 bg-red-600/10 rounded-full blur-3xl pointer-events-none" />
@@ -151,15 +151,15 @@ export default function QuestionCard({
       {question.options && question.options.length >= 2 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
           {question.options.map((opt, idx) => {
-            let btnStyle = 'bg-gray-800/80 hover:bg-gray-750 text-gray-200 border-gray-700 hover:border-amber-500/50';
+            let btnStyle = 'bg-gray-800/80 hover:bg-gray-750 text-gray-200 border-gray-700 hover:border-amber-500/50 shadow-[0_4px_0_#1e293b] hover:shadow-[0_6px_0_#1e293b] active:translate-y-1 active:shadow-none';
             let icon = null;
 
             if (hasAnswered) {
               if (opt === question.correctAnswer) {
-                btnStyle = 'bg-emerald-950/80 border-emerald-500 text-emerald-200 font-bold shadow-lg shadow-emerald-900/30 scale-[1.01]';
+                btnStyle = 'bg-emerald-950/80 border-emerald-500 text-emerald-200 font-bold shadow-[0_4px_0_#065f46] scale-[1.01]';
                 icon = <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />;
               } else if (opt === selectedOption) {
-                btnStyle = 'bg-red-950/80 border-red-500 text-red-200 font-semibold';
+                btnStyle = 'bg-red-950/80 border-red-500 text-red-200 font-semibold shadow-[0_4px_0_#991b1b]';
                 icon = <XCircle className="w-5 h-5 text-red-400 shrink-0" />;
               } else {
                 btnStyle = 'bg-gray-900/40 text-gray-500 border-gray-800 opacity-60';

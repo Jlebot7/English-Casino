@@ -238,7 +238,7 @@ export default function StudentSpinnerModal({
 
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
-      <div className="bg-gradient-to-b from-gray-900 via-gray-950 to-black border-2 border-amber-500/80 rounded-3xl p-6 max-w-lg w-full shadow-2xl relative text-center flex flex-col items-center">
+      <div className="bg-gradient-to-b from-gray-900 via-gray-950 to-black border-2 border-amber-500/80 rounded-3xl p-6 max-w-lg w-full cabinet-3d-shadow relative text-center flex flex-col items-center">
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -262,15 +262,20 @@ export default function StudentSpinnerModal({
           </p>
         </div>
 
-        {/* Wheel Canvas Container */}
+        {/* Wheel Canvas Container in 3D Perspective Stage */}
         {students.length > 0 ? (
-          <div className="relative my-2">
-            <canvas
-              ref={canvasRef}
-              width={340}
-              height={340}
-              className="rounded-full shadow-2xl border-4 border-amber-500/40"
-            />
+          <div className="casino-3d-stage relative my-2">
+            <div
+              className="transition-transform duration-500"
+              style={{ transform: 'perspective(750px) rotateX(15deg)', transformStyle: 'preserve-3d' }}
+            >
+              <canvas
+                ref={canvasRef}
+                width={340}
+                height={340}
+                className="rounded-full cabinet-3d-shadow border-4 border-amber-500/60"
+              />
+            </div>
           </div>
         ) : (
           <div className="py-12 px-6 border-2 border-dashed border-gray-800 rounded-3xl my-4 max-w-sm">
