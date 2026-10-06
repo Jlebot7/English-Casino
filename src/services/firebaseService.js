@@ -49,7 +49,30 @@ export function initFirebase(customConfig = null) {
 export function getStoredFirebaseConfig() {
   try {
     const raw = localStorage.getItem(FIREBASE_CONFIG_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (raw) return JSON.parse(raw);
+
+    // Support GitHub Secrets / Vite env variables (VITE_FIREBASE_CONFIG full JSON)
+    if (import.meta.env.VITE_FIREBASE_CONFIG) {
+      try {
+        return JSON.parse(import.meta.env.VITE_FIREBASE_CONFIG);
+      } catch (err) {
+        console.warn('Could not parse VITE_FIREBASE_CONFIG environment variable:', err);
+      }
+    }
+
+    // Support individual GitHub Secrets / Vite env variables
+    if (import.meta.env.VITE_FIREBASE_API_KEY && import.meta.env.VITE_FIREBASE_PROJECT_ID) {
+      return {
+        apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com`,
+        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebasestorage.app`,
+        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+        appId: import.meta.env.VITE_FIREBASE_APP_ID || ''
+      };
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -67,6 +90,13 @@ export function saveStoredFirebaseConfig(config) {
 
 export function isFirebaseConfigured() {
   return db !== null;
+}
+
+export function getFirebaseAppInstance() {
+  if (!firebaseApp && getApps().length > 0) {
+    firebaseApp = getApp();
+  }
+  return firebaseApp;
 }
 
 // Generate a random 6-character room PIN (e.g. 777WIN, LUCK88)

@@ -227,12 +227,35 @@ Tu proyecto incluye un flujo automatizado en `.github/workflows/deploy.yml`.
 4. En **Build and deployment** > **Source**, selecciona:
    👉 **`GitHub Actions`**
 
-### Paso 7.2: Subir Cambios y Publicar
+### Paso 7.2: Configurar Secretos en GitHub (Groq y Firebase Automáticos)
+Para que la app en GitHub Pages ya inicie con tu clave de Groq y conexión a Firebase sin tener que ingresarlas manualmente en cada navegador:
+
+1. Ve a tu repositorio en GitHub: `https://github.com/TU_USUARIO/English-Casino`.
+2. Haz clic en la pestaña **Settings** (⚙️ Configuración) del repositorio.
+3. En el menú lateral izquierdo, ve a **Secrets and variables** > **Actions**.
+4. Haz clic en el botón verde **"New repository secret"**.
+5. Crea los siguientes secretos (según lo que quieras automatizar):
+
+#### Secreto 1: Clave de Groq
+* **Name**: `VITE_GROQ_API_KEY`
+* **Secret**: Pega tu clave de Groq (comienza con `gsk_...`).
+* Haz clic en **Add secret**.
+
+#### Secreto 2: Configuración de Firebase
+* **Name**: `VITE_FIREBASE_CONFIG`
+* **Secret**: Pega todo el objeto JSON de Firebase que copiaste de la consola (con llaves `{ ... }`).
+* Haz clic en **Add secret**.
+
+> **Nota:** Cada vez que hagas un `git push` a `master`, GitHub Actions compilará la app inyectando estos secretos automáticamente. Si en algún momento deseas cambiarlos, puedes actualizarlos en GitHub Secrets o sobreescribirlos desde el botón ⚙️ Ajustes de la app.
+
+---
+
+### Paso 7.3: Subir Cambios y Publicar
 Desde la terminal en tu computadora:
 
 ```powershell
 git add .
-git commit -m "feat: updated casino classroom app"
+git commit -m "feat: updated casino classroom app with github secrets support"
 git push origin master
 ```
 

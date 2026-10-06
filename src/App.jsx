@@ -167,7 +167,7 @@ export default function App() {
 
   // Settings & Configuration
   const [groqApiKey, setGroqApiKey] = useState(() => {
-    return localStorage.getItem(STORAGE_GROQ_KEY) || '';
+    return localStorage.getItem(STORAGE_GROQ_KEY) || import.meta.env.VITE_GROQ_API_KEY || '';
   });
   const [volume, setVolume] = useState(0.6);
   const [isMuted, setIsMuted] = useState(false);
