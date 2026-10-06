@@ -89,6 +89,14 @@ export default function RouletteGame({
 
     ctx.clearRect(0, 0, width, height);
 
+    // 0. 3D shadow underneath the wheel
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(centerX, centerY + 15, outerRadius + 8, outerRadius, 0, 0, 2 * Math.PI);
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fill();
+    ctx.restore();
+
     // 1. Mahogany / Rosewood Outer Casino Bezel
     ctx.save();
     ctx.beginPath();
@@ -114,6 +122,18 @@ export default function RouletteGame({
       ctx.fillStyle = i % 2 === 0 ? '#fde047' : '#ffffff';
       ctx.fill();
     }
+    ctx.restore();
+
+    // 1.5 Metallic Silver Rim
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, outerRadius - 1, 0, 2 * Math.PI);
+    const rimGrad = ctx.createLinearGradient(centerX - outerRadius, centerY - outerRadius, centerX + outerRadius, centerY + outerRadius);
+    rimGrad.addColorStop(0, '#c0c0c0');
+    rimGrad.addColorStop(1, '#4b5563');
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = rimGrad;
+    ctx.stroke();
     ctx.restore();
 
     // 2. Ball Track Ring (Dark Polished Metal)
@@ -148,10 +168,15 @@ export default function RouletteGame({
       }
       ctx.fill();
 
-      // Divider Frets (Metallic separators)
+      // Divider Frets (Metallic separators) - Subtle 3D edge
       ctx.lineWidth = 1;
+      ctx.strokeStyle = '#1e293b';
+      ctx.stroke();
+      ctx.save();
+      ctx.translate(1, 1);
       ctx.strokeStyle = '#e2e8f0';
       ctx.stroke();
+      ctx.restore();
 
       // Number Label inside pocket
       ctx.save();
@@ -225,6 +250,13 @@ export default function RouletteGame({
       ctx.lineWidth = 1;
       ctx.strokeStyle = '#cbd5e1';
       ctx.stroke();
+
+      // Specular highlight on the ball
+      ctx.beginPath();
+      ctx.arc(bx - 1.5, by - 1.5, 1.5, 0, 2 * Math.PI);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.fill();
+
       ctx.restore();
     }
   };
@@ -473,7 +505,7 @@ export default function RouletteGame({
       {/* Main Roulette Stage */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Canvas Wheel */}
-        <div className="lg:col-span-6 bg-gradient-to-b from-gray-900 via-slate-950 to-black border-2 border-blue-500/40 rounded-3xl p-5 shadow-2xl flex flex-col items-center justify-center relative overflow-hidden">
+        <div className="lg:col-span-6 bg-gradient-to-b from-gray-900 via-slate-950 to-black border-2 border-blue-500/40 rounded-3xl p-5 shadow-2xl flex flex-col items-center justify-center relative overflow-hidden casino-3d-stage cabinet-3d-shadow">
           <div className="w-full flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-blue-400 uppercase tracking-widest flex items-center gap-1.5">
               <Disc3 className="w-4 h-4 text-yellow-400" />
@@ -486,7 +518,7 @@ export default function RouletteGame({
             )}
           </div>
 
-          <div className="relative my-3">
+          <div className="relative my-3" style={{ transform: 'perspective(800px) rotateX(18deg)' }}>
             <canvas
               ref={canvasRef}
               width={370}
@@ -503,7 +535,7 @@ export default function RouletteGame({
         </div>
 
         {/* Right Column: 2 of 3 Criteria Betting Board & Controls */}
-        <div className="lg:col-span-6 bg-gradient-to-b from-gray-900 via-gray-950 to-black border-2 border-blue-500/40 rounded-3xl p-6 shadow-2xl space-y-5">
+        <div className="lg:col-span-6 bg-gradient-to-b from-gray-900 via-gray-950 to-black border-2 border-blue-500/40 rounded-3xl p-6 shadow-2xl space-y-5 cabinet-3d-shadow">
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-bold uppercase tracking-wider mb-2">
               <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
@@ -668,7 +700,8 @@ export default function RouletteGame({
             <button
               onClick={spinRoulette}
               disabled={isSpinning || chips < bet}
-              className="w-full py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 text-white font-black text-base rounded-2xl shadow-xl shadow-blue-950/60 transition transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+              style={{ transform: 'perspective(600px) rotateX(3deg)' }}
+              className="w-full py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 text-white font-black text-base rounded-2xl shadow-xl shadow-blue-950/60 transition transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2 cabinet-3d-shadow"
             >
               <Disc3 className={`w-5 h-5 text-yellow-300 ${isSpinning ? 'animate-spin' : ''}`} />
               <span>{isSpinning ? 'GIRANDO LA RULETA...' : `LANZAR BOLA (Apostar ${bet} Fichas)`}</span>
@@ -677,7 +710,7 @@ export default function RouletteGame({
 
           {/* Criteria Breakdown Results Display */}
           {criteriaResults && (
-            <div className={`p-4 rounded-2xl border ${criteriaResults.isExonerated ? 'bg-emerald-950/40 border-emerald-500/50' : 'bg-red-950/40 border-red-500/50'} space-y-2`}>
+            <div className={`p-4 rounded-2xl border ${criteriaResults.isExonerated ? 'bg-emerald-950/40 border-emerald-500/50 win-glow' : 'bg-red-950/40 border-red-500/50'} space-y-2`}>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-white">
                   Resultado del Giro: Número {criteriaResults.number}

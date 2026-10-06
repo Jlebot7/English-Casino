@@ -92,7 +92,16 @@ export default function PlinkoGame({
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, width, height);
 
+    // subtle vertical shadow line on the left side
+    const shadowGrad = ctx.createLinearGradient(0, 0, 15, 0);
+    shadowGrad.addColorStop(0, 'rgba(0,0,0,0.8)');
+    shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = shadowGrad;
+    ctx.fillRect(0, 0, 15, height);
+    ctx.restore();
+
     // Top Chute funnel
+    ctx.save();
     ctx.beginPath();
     ctx.moveTo(width / 2 - 25, 10);
     ctx.lineTo(width / 2 - 12, 45);
@@ -113,6 +122,13 @@ export default function PlinkoGame({
     pins.forEach((pin) => {
       const flash = activePegFlashRef.current.find(f => f.id === pin.id);
       ctx.save();
+      
+      // small dark shadow arc below each pin
+      ctx.beginPath();
+      ctx.arc(pin.x, pin.y + 1.5, pin.r, 0, Math.PI, false);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fill();
+
       ctx.beginPath();
       ctx.arc(pin.x, pin.y, pin.r, 0, 2 * Math.PI);
 
@@ -121,8 +137,12 @@ export default function PlinkoGame({
         ctx.shadowColor = '#fbbf24';
         ctx.shadowBlur = 15;
       } else {
-        ctx.fillStyle = '#94a3b8';
-        ctx.shadowColor = 'rgba(255,255,255,0.4)';
+        const pinGrad = ctx.createRadialGradient(pin.x - 1, pin.y - 1, 0, pin.x, pin.y, pin.r);
+        pinGrad.addColorStop(0, '#ffffff');
+        pinGrad.addColorStop(0.3, '#cbd5e1');
+        pinGrad.addColorStop(1, '#475569');
+        ctx.fillStyle = pinGrad;
+        ctx.shadowColor = 'rgba(0,0,0,0.4)';
         ctx.shadowBlur = 4;
       }
       ctx.fill();
@@ -144,6 +164,14 @@ export default function PlinkoGame({
       ctx.fillStyle = isLanded ? '#facc15' : bin.color;
       ctx.fill();
 
+      // darker border at the bottom of each bin (2px)
+      ctx.beginPath();
+      ctx.moveTo(bx + 4.5, binY + 34);
+      ctx.lineTo(bx + binWidth - 1.5, binY + 34);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.stroke();
+
       ctx.lineWidth = isLanded ? 3 : 1;
       ctx.strokeStyle = isLanded ? '#ffffff' : '#00000040';
       ctx.stroke();
@@ -161,17 +189,25 @@ export default function PlinkoGame({
       ctx.save();
       ctx.beginPath();
       ctx.arc(ball.x, ball.y, ballRadius, 0, 2 * Math.PI);
-      const bGrad = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 1, ball.x, ball.y, ballRadius);
-      bGrad.addColorStop(0, '#fef08a');
+      const bGrad = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 0.5, ball.x + 2, ball.y + 2, ballRadius);
+      bGrad.addColorStop(0, '#ffffff');
+      bGrad.addColorStop(0.2, '#fef08a');
       bGrad.addColorStop(0.5, '#f59e0b');
-      bGrad.addColorStop(1, '#b45309');
+      bGrad.addColorStop(1, '#78350f');
       ctx.fillStyle = bGrad;
       ctx.shadowColor = '#f59e0b';
       ctx.shadowBlur = 12;
       ctx.fill();
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#fef08a';
       ctx.stroke();
+
+      // Specular highlight
+      ctx.beginPath();
+      ctx.arc(ball.x - 2.5, ball.y - 2.5, 2, 0, 2 * Math.PI);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.fill();
+      
       ctx.restore();
     }
   };
@@ -400,7 +436,7 @@ export default function PlinkoGame({
       {/* Main Plinko Stage */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
         {/* Plinko Pegboard Canvas */}
-        <div className="md:col-span-7 bg-gradient-to-b from-gray-900 via-slate-950 to-black border-2 border-amber-500/40 rounded-3xl p-5 shadow-2xl flex flex-col items-center justify-center">
+        <div className={`md:col-span-7 bg-gradient-to-b from-gray-900 via-slate-950 to-black border-2 border-amber-500/40 rounded-3xl p-5 shadow-2xl flex flex-col items-center justify-center casino-3d-stage cabinet-3d-shadow ${roundOutcome === 'lucky_exonerated' ? 'win-glow' : ''}`} style={{ transform: 'perspective(700px) rotateX(10deg)' }}>
           <div className="w-full flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-yellow-400" />
@@ -426,7 +462,7 @@ export default function PlinkoGame({
         </div>
 
         {/* Controls Column */}
-        <div className="md:col-span-5 bg-gradient-to-b from-gray-900 via-gray-950 to-black border-2 border-amber-500/40 rounded-3xl p-6 shadow-2xl space-y-5">
+        <div className="md:col-span-5 bg-gradient-to-b from-gray-900 via-gray-950 to-black border-2 border-amber-500/40 rounded-3xl p-6 shadow-2xl space-y-5 cabinet-3d-shadow">
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold uppercase tracking-wider mb-2">
               <Trophy className="w-3.5 h-3.5 text-yellow-400" />
@@ -471,7 +507,7 @@ export default function PlinkoGame({
             <button
               onClick={handleDropChip}
               disabled={isDropping || chips < bet}
-              className="w-full py-4 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 text-black font-black text-base rounded-2xl shadow-xl shadow-amber-950/60 transition transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+              className="w-full py-4 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 text-black font-black text-base rounded-2xl shadow-xl shadow-amber-950/60 transition transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2 cabinet-3d-shadow"
             >
               <Play className={`w-5 h-5 ${isDropping ? 'animate-bounce' : ''}`} />
               <span>{isDropping ? 'REBOTANDO EN LOS PINES...' : `SOLTAR FICHA (${bet} Fichas)`}</span>

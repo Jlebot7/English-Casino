@@ -274,52 +274,63 @@ export default function SlotsGame({
       )}
 
       {/* Slot Machine Cabinet */}
-      <div className="bg-gradient-to-b from-red-950 via-gray-950 to-black border-4 border-amber-500 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden text-center">
-        {/* Neon Light Top Border */}
-        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-yellow-400 via-amber-500 to-red-500 animate-pulse" />
+      <div className="casino-3d-stage">
+        <div className={`bg-gradient-to-b from-red-950 via-gray-950 to-black border-4 border-amber-500 rounded-3xl p-6 md:p-8 relative overflow-hidden text-center cabinet-3d-shadow transition-colors duration-500 ${
+          roundOutcome === 'lucky_exonerated' ? 'win-glow' : ''
+        }`}>
+          {/* Neon Light Top Border */}
+          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-yellow-400 via-amber-500 to-red-500 animate-pulse" />
+          
+          {/* Metallic Sweep Overlay */}
+          <div className="absolute inset-0 metallic-shine pointer-events-none" />
 
-        {/* Slot Machine Cabinet with Animated Side Lever */}
-        <div className="relative max-w-lg mx-auto my-4 flex items-center justify-center">
-          {/* Cabinet Body */}
-          <div className="w-full bg-black/85 border-4 border-amber-400 rounded-3xl p-5 shadow-inner relative overflow-hidden">
-            {/* Flashing Marquee Bulbs Header */}
-            <div className="flex justify-between items-center px-4 mb-3">
-              {[...Array(9)].map((_, i) => (
-                <div
-                  key={i}
-                  className={`w-2.5 h-2.5 rounded-full ${
-                    isSpinning
-                      ? i % 2 === 0 ? 'bg-yellow-300 shadow-[0_0_8px_#fde047]' : 'bg-red-500 shadow-[0_0_8px_#ef4444]'
-                      : 'bg-amber-400/80 shadow-[0_0_4px_#f59e0b]'
-                  } transition-colors duration-200`}
-                />
-              ))}
-            </div>
+          {/* Slot Machine Cabinet with Animated Side Lever */}
+          <div className="relative max-w-lg mx-auto my-4 flex items-center justify-center">
+            {/* Cabinet Body */}
+            <div className="w-full bg-black/85 border-4 border-amber-400 rounded-3xl p-5 shadow-inner relative overflow-hidden z-10">
+              {/* Flashing Marquee Bulbs Header */}
+              <div className="flex justify-between items-center px-4 mb-3" style={{ transformStyle: 'preserve-3d' }}>
+                {[...Array(9)].map((_, i) => (
+                  <div
+                    key={i}
+                    className={`w-2.5 h-2.5 rounded-full hover:[transform:translateZ(4px)] ${
+                      isSpinning
+                        ? i % 2 === 0 ? 'bg-yellow-300 shadow-[0_0_8px_#fde047]' : 'bg-red-500 shadow-[0_0_8px_#ef4444]'
+                        : 'bg-amber-400/80 shadow-[0_0_4px_#f59e0b]'
+                    } transition-all duration-200 cursor-default`}
+                  />
+                ))}
+              </div>
 
-            {/* Reels Display Box */}
-            <div className="grid grid-cols-3 gap-3 md:gap-4 bg-gradient-to-b from-gray-950 via-gray-900 to-black p-3.5 rounded-2xl border-2 border-amber-500/50 shadow-inner">
-              {reels.map((symbol, idx) => (
-                <div
-                  key={idx}
-                  className={`h-28 md:h-32 rounded-xl bg-gradient-to-b from-gray-900 to-black border-2 ${
-                    roundOutcome === 'lucky_exonerated'
-                      ? 'border-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.5)]'
-                      : 'border-amber-500/40'
-                  } flex items-center justify-center text-5xl md:text-6xl shadow-lg select-none transition-all duration-100 ${
-                    isSpinning ? 'blur-[1.5px] scale-95 animate-pulse' : 'scale-100'
-                  }`}
-                >
-                  {symbol}
-                </div>
-              ))}
+              {/* Reels Display Box */}
+              <div 
+                className="grid grid-cols-3 gap-3 md:gap-4 bg-gradient-to-b from-gray-950 via-gray-900 to-black p-3.5 rounded-2xl border-2 border-amber-500/50 shadow-inner"
+                style={{ perspective: '800px', transformStyle: 'preserve-3d' }}
+              >
+                {reels.map((symbol, idx) => (
+                  <div
+                    key={idx}
+                    className={`h-28 md:h-32 rounded-xl bg-gradient-to-b from-gray-900 to-black border-2 relative overflow-hidden ${
+                      roundOutcome === 'lucky_exonerated'
+                        ? 'border-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.5)]'
+                        : 'border-amber-500/40'
+                    } flex items-center justify-center text-5xl md:text-6xl shadow-lg select-none transition-all duration-100 ${
+                      isSpinning ? 'reel-spin-3d blur-[1px] scale-95' : 'reel-stop-3d scale-100'
+                    }`}
+                  >
+                    {symbol}
+                    {/* Glass Reflection Overlay */}
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.15)_0%,transparent_70%)] pointer-events-none" />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
 
           {/* Animated Physical Lever on right side */}
-          <div className="hidden sm:flex flex-col items-center ml-2 cursor-pointer select-none" onClick={handleSpinRequest}>
+          <div className="hidden sm:flex flex-col items-center ml-2 cursor-pointer select-none z-10" onClick={handleSpinRequest}>
             <div
-              className={`w-4 bg-gradient-to-b from-gray-400 to-gray-700 rounded-full border border-gray-500 transition-all duration-300 origin-bottom ${
-                isSpinning ? 'h-14 translate-y-8 rotate-12' : 'h-24 hover:scale-105'
+              className={`w-4 bg-gradient-to-b from-gray-400 to-gray-700 rounded-full border border-gray-500 transition-all duration-500 origin-bottom ${
+                isSpinning ? 'h-14 translate-y-8 [transform:rotateX(60deg)_rotateZ(12deg)]' : 'h-24 hover:scale-105'
               }`}
             >
               {/* Golden Knob at lever top */}
@@ -407,6 +418,7 @@ export default function SlotsGame({
             </button>
           </div>
         )}
+      </div>
       </div>
 
       {/* Unlucky English Challenge Section */}

@@ -52,6 +52,24 @@ export default function CrashRocketGame({
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, width, height);
 
+    // Stars Parallax
+    if (starsRef.current.length > 0) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      starsRef.current.forEach(star => {
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        if (state === 'flying') {
+          star.y += star.speed;
+          if (star.y > height) {
+            star.y = 0;
+            star.x = Math.random() * width;
+          }
+        }
+      });
+    }
+
     // Grid Lines
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
     ctx.lineWidth = 1;
@@ -178,7 +196,7 @@ export default function CrashRocketGame({
     } else if (state === 'flying') {
       ctx.fillStyle = '#facc15';
       ctx.shadowColor = '#ca8a04';
-      ctx.shadowBlur = 16;
+      ctx.shadowBlur = 25;
       ctx.fillText(`${currentMult.toFixed(2)}x`, width / 2, height / 2 - 20);
     } else {
       ctx.fillStyle = '#94a3b8';
@@ -396,7 +414,7 @@ export default function CrashRocketGame({
       {/* Main Crash Stage */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
         {/* Canvas Flight Display */}
-        <div className="md:col-span-7 bg-gradient-to-b from-gray-900 via-slate-950 to-black border-2 border-sky-500/40 rounded-3xl p-5 shadow-2xl flex flex-col items-center justify-center">
+        <div className={`md:col-span-7 bg-gradient-to-b from-gray-900 via-slate-950 to-black border-2 border-sky-500/40 rounded-3xl p-5 shadow-2xl flex flex-col items-center justify-center casino-3d-stage cabinet-3d-shadow ${gameState === 'flying' ? 'rocket-thrust' : ''} ${gameState === 'crashed' ? 'mine-shake' : ''}`}>
           <div className="w-full flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
               <Rocket className="w-4 h-4 text-yellow-400" />
@@ -465,7 +483,8 @@ export default function CrashRocketGame({
             <button
               onClick={handleLaunchRocket}
               disabled={chips < bet}
-              className="w-full py-4 bg-gradient-to-r from-sky-500 via-indigo-600 to-sky-600 hover:from-sky-400 text-white font-black text-base rounded-2xl shadow-xl shadow-sky-950/60 transition transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+              style={{ transform: 'perspective(600px) rotateX(2deg)' }}
+              className="cabinet-3d-shadow w-full py-4 bg-gradient-to-r from-sky-500 via-indigo-600 to-sky-600 hover:from-sky-400 text-white font-black text-base rounded-2xl shadow-xl shadow-sky-950/60 transition transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
             >
               <Rocket className="w-5 h-5 text-yellow-300" />
               <span>DESPEGAR COHETE ({bet} Fichas)</span>
@@ -475,10 +494,11 @@ export default function CrashRocketGame({
           {gameState === 'flying' && (
             <button
               onClick={handleCashOut}
-              className="w-full py-5 bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-400 text-black font-black text-lg rounded-2xl shadow-2xl shadow-emerald-950/80 animate-pulse transition transform hover:scale-[1.03] active:scale-95 cursor-pointer flex items-center justify-center gap-2 border-2 border-emerald-300"
+              style={{ transform: 'perspective(500px) rotateX(3deg)', boxShadow: '0 8px 30px rgba(16,185,129,0.5), 0 2px 0 #065f46' }}
+              className="metallic-shine relative overflow-hidden w-full py-5 bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-400 text-black font-black text-lg rounded-2xl shadow-2xl shadow-emerald-950/80 animate-pulse transition transform hover:scale-[1.03] active:scale-95 cursor-pointer flex items-center justify-center gap-2 border-2 border-emerald-300"
             >
-              <Coins className="w-6 h-6 text-black" />
-              <span>COBRAR {Math.round(bet * multiplier)} FICHAS ({multiplier.toFixed(2)}x)</span>
+              <Coins className="w-6 h-6 text-black relative z-10" />
+              <span className="relative z-10">COBRAR {Math.round(bet * multiplier)} FICHAS ({multiplier.toFixed(2)}x)</span>
             </button>
           )}
 

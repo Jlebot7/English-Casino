@@ -353,7 +353,11 @@ export default function BlackjackGame({
       )}
 
       {/* Green Felt Table */}
-      <div className="bg-gradient-to-b from-emerald-950 via-green-950 to-gray-950 border-4 border-amber-500 rounded-3xl p-6 shadow-2xl relative text-center">
+      <div className="casino-3d-stage">
+        <div 
+          className="bg-gradient-to-b from-emerald-950 via-green-950 to-gray-950 border-4 border-amber-500 rounded-3xl p-6 cabinet-3d-shadow relative text-center"
+          style={{ transform: 'perspective(1000px) rotateX(8deg)', transformStyle: 'preserve-3d' }}
+        >
         {/* Dealer Area */}
         <div className="mb-6">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/50 border border-emerald-500/40 text-emerald-300 text-xs font-bold uppercase mb-3">
@@ -374,7 +378,7 @@ export default function BlackjackGame({
                   return (
                     <div
                       key={idx}
-                      className="w-16 h-24 md:w-20 md:h-28 rounded-xl bg-gradient-to-br from-blue-900 to-indigo-950 border-2 border-amber-400 shadow-xl flex items-center justify-center text-amber-300 font-bold text-xs select-none"
+                      className="w-16 h-24 md:w-20 md:h-28 rounded-xl bg-gradient-to-br from-blue-900 to-indigo-950 border-2 border-amber-400 shadow-[0_4px_12px_rgba(0,0,0,0.5)] flex items-center justify-center text-amber-300 font-bold text-xs select-none card-deal-3d card-3d"
                     >
                       🂠 VEGAS
                     </div>
@@ -384,7 +388,7 @@ export default function BlackjackGame({
                 return (
                   <div
                     key={idx}
-                    className="w-16 h-24 md:w-20 md:h-28 rounded-xl bg-white border-2 border-gray-300 shadow-2xl flex flex-col justify-between p-2 select-none transform hover:scale-105 hover:-translate-y-1 transition duration-200 animate-fadeIn"
+                    className="w-16 h-24 md:w-20 md:h-28 rounded-xl bg-white border-2 border-gray-300 shadow-2xl flex flex-col justify-between p-2 select-none transform transition duration-200 card-deal-3d card-3d"
                     style={{ transform: `rotate(${(idx - (dealerHand.length - 1) / 2) * 4}deg)` }}
                   >
                     <span className={`text-sm md:text-base font-black ${card.color}`}>{card.value}</span>
@@ -398,7 +402,7 @@ export default function BlackjackGame({
         </div>
 
         {/* Player Area */}
-        <div className="pt-4 border-t border-emerald-800/60">
+        <div className={`pt-4 border-t border-emerald-800/60 transition-colors duration-500 rounded-xl ${playerScore === 21 ? 'win-glow' : ''}`}>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/50 border border-amber-500/40 text-amber-300 text-xs font-bold uppercase mb-3">
             <span>👤 Mano del Alumno</span>
             {playerHand.length > 0 && (
@@ -421,7 +425,7 @@ export default function BlackjackGame({
                   key={idx}
                   className={`w-16 h-24 md:w-20 md:h-28 rounded-xl bg-white border-2 ${
                     playerScore === 21 ? 'border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.6)]' : 'border-gray-300'
-                  } shadow-2xl flex flex-col justify-between p-2 select-none transform hover:scale-105 hover:-translate-y-1 transition duration-200 animate-fadeIn`}
+                  } shadow-2xl flex flex-col justify-between p-2 select-none transform transition duration-200 card-deal-3d card-3d`}
                   style={{ transform: `rotate(${(idx - (playerHand.length - 1) / 2) * 5}deg)` }}
                 >
                   <span className={`text-sm md:text-base font-black ${card.color}`}>{card.value}</span>
@@ -466,8 +470,8 @@ export default function BlackjackGame({
                     }}
                     className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
                       bet === amount
-                        ? 'bg-amber-500 text-black shadow font-black scale-105'
-                        : 'bg-black/60 text-gray-300 hover:bg-gray-800 border border-gray-700'
+                        ? 'bg-gradient-to-b from-amber-400 to-amber-600 border-b-4 border-amber-700 text-black shadow font-black scale-105'
+                        : 'bg-gradient-to-b from-gray-700 to-gray-900 border-b-4 border-gray-950 text-gray-300 hover:bg-gray-800'
                     }`}
                   >
                     {amount}
@@ -530,6 +534,7 @@ export default function BlackjackGame({
             </div>
           )}
         </div>
+      </div>
       </div>
 
       {/* Unlucky English Challenge Section */}

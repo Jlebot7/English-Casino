@@ -247,34 +247,39 @@ export default function MinesGame({
           </div>
 
           {/* Grid Container */}
-          <div className="grid grid-cols-5 gap-2.5 p-3 bg-black/60 border border-gray-800 rounded-3xl w-full max-w-sm aspect-square shadow-inner">
-            {Array.from({ length: GRID_SIZE }).map((_, idx) => {
-              const status = revealedTiles[idx];
-              const isRevealed = status !== undefined;
+          <div className={`casino-3d-stage w-full max-w-sm mx-auto ${roundOutcome === 'lucky_exonerated' ? 'win-glow' : ''}`}>
+            <div 
+              style={{ transform: 'perspective(800px) rotateX(12deg) rotateY(-2deg)' }}
+              className="grid grid-cols-5 gap-2.5 p-3 bg-black/60 border border-gray-800 rounded-3xl w-full h-full aspect-square shadow-inner"
+            >
+              {Array.from({ length: GRID_SIZE }).map((_, idx) => {
+                const status = revealedTiles[idx];
+                const isRevealed = status !== undefined;
 
-              return (
-                <button
-                  key={idx}
-                  disabled={!isPlaying || isRevealed}
-                  onClick={() => handleTileClick(idx)}
-                  className={`relative rounded-2xl transition-all duration-300 flex items-center justify-center text-2xl font-bold cursor-pointer select-none shadow-md ${
-                    isRevealed
-                      ? status === 'gem'
-                        ? 'bg-gradient-to-br from-emerald-600 to-teal-800 border-2 border-emerald-300 text-white scale-95 shadow-emerald-950/60'
-                        : 'bg-gradient-to-br from-red-600 to-rose-900 border-2 border-red-400 text-white scale-95 animate-shake'
-                      : isPlaying
-                      ? 'bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 hover:border-emerald-400 hover:scale-105 active:scale-95 text-gray-400'
-                      : 'bg-gray-850 border border-gray-800 text-gray-600 opacity-60'
-                  }`}
-                >
-                  {isRevealed ? (
-                    status === 'gem' ? '💎' : '💣'
-                  ) : (
-                    <span className="text-xs text-gray-500 font-mono">?</span>
-                  )}
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={idx}
+                    disabled={!isPlaying || isRevealed}
+                    onClick={() => handleTileClick(idx)}
+                    className={`relative rounded-2xl transition-all duration-300 flex items-center justify-center text-2xl font-bold cursor-pointer select-none shadow-md ${
+                      isRevealed
+                        ? status === 'gem'
+                          ? 'bg-gradient-to-br from-emerald-600 to-teal-800 border-2 border-emerald-300 text-white scale-95 shadow-emerald-950/60 tile-flip-3d gem-sparkle'
+                          : 'bg-gradient-to-br from-red-600 to-rose-900 border-2 border-red-400 text-white scale-95 animate-shake tile-flip-3d mine-shake shadow-[0_0_15px_rgba(239,68,68,0.6)]'
+                        : isPlaying
+                        ? 'bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 hover:border-emerald-400 hover:scale-105 active:scale-95 text-gray-400 shadow-[0_6px_0_#1e293b,0_8px_20px_rgba(0,0,0,0.4)] hover:-translate-y-0.5 hover:shadow-[0_8px_0_#1e293b,0_10px_24px_rgba(0,0,0,0.5)]'
+                        : 'bg-gray-850 border border-gray-800 text-gray-600 opacity-60 shadow-[0_6px_0_#1e293b,0_8px_20px_rgba(0,0,0,0.4)]'
+                    }`}
+                  >
+                    {isRevealed ? (
+                      status === 'gem' ? '💎' : '💣'
+                    ) : (
+                      <span className="text-xs text-gray-500 font-mono">?</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <p className="text-[11px] text-gray-400 text-center mt-4">
@@ -347,14 +352,14 @@ export default function MinesGame({
             <button
               onClick={handleCashOut}
               disabled={gemsFound < 2}
-              className={`w-full py-4 font-black text-base rounded-2xl shadow-xl transition transform cursor-pointer flex items-center justify-center gap-2 border ${
+              className={`cabinet-3d-shadow w-full py-4 font-black text-base rounded-2xl shadow-xl transition transform cursor-pointer flex items-center justify-center gap-2 border ${
                 gemsFound >= 2
-                  ? 'bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-400 text-black border-emerald-300 animate-pulse hover:scale-[1.02]'
+                  ? 'bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-400 text-black border-emerald-300 animate-pulse hover:scale-[1.02] metallic-shine relative overflow-hidden'
                   : 'bg-gray-800 border-gray-700 text-gray-400 opacity-60 cursor-not-allowed'
               }`}
             >
-              <ShieldCheck className="w-5 h-5" />
-              <span>
+              <ShieldCheck className="w-5 h-5 relative z-10" />
+              <span className="relative z-10">
                 {gemsFound >= 2
                   ? `PLANTARSE Y EXONERARSE (${Math.round(bet * currentMultiplier)} FICHAS)`
                   : `ENCUENTRA ${2 - gemsFound} GEMA(S) MÁS PARA EXONERARTE`}
