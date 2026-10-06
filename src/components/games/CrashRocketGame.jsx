@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
+import * as THREE from 'three';
 import confetti from 'canvas-confetti';
-import { ArrowLeft, Coins, Rocket, Sparkles, Trophy, AlertCircle, Flame, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Coins, Rocket, Sparkles, Trophy, AlertCircle, Maximize2, Minimize2 } from 'lucide-react';
 import { sounds } from '../../utils/soundEffects';
+import { disposeThreeScene, toggleFullscreen } from '../../utils/threeUtils';
 import QuestionCard from '../QuestionCard';
 
 export default function CrashRocketGame({
@@ -14,10 +16,14 @@ export default function CrashRocketGame({
   onAdvanceStudentTurn,
   onGenerateTurnQuestion
 }) {
+  const containerRef = useRef(null);
   const canvasRef = useRef(null);
+
+  // Core gameplay states
   const [bet, setBet] = useState(50);
   const [gameState, setGameState] = useState('idle'); // 'idle' | 'flying' | 'crashed' | 'cashed_out'
   const [multiplier, setMultiplier] = useState(1.00);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Outcome & Challenge states
   const [roundOutcome, setRoundOutcome] = useState(null); // 'lucky_exonerated' | 'unlucky_challenge' | null
@@ -26,192 +32,378 @@ export default function CrashRocketGame({
   const [turnQuestionOverride, setTurnQuestionOverride] = useState(null);
   const [isGeneratingIA, setIsGeneratingIA] = useState(false);
 
-  const animationFrameRef = useRef(null);
+  // Three.js and Animation refs
   const crashPointRef = useRef(2.0);
   const startTimeRef = useRef(0);
   const cashedOutMultiplierRef = useRef(null);
+  const reqIdRef = useRef(null);
+
+  // Stars ref properly declared and safeguarded!
+  const starsRef = useRef(null);
+  const planeGroupRef = useRef(null);
+  const propellerRef = useRef(null);
+  const jetFlamesRef = useRef([]);
+  const cloudsGroupRef = useRef(null);
+  const trailParticlesRef = useRef(null);
+  const explosionGroupRef = useRef(null);
+  const sceneRef = useRef(null);
+  const cameraRef = useRef(null);
+  const rendererRef = useRef(null);
 
   const questions = activity?.questions || [];
   const currentQuestion = turnQuestionOverride || questions[currentQuestionIndex % (questions.length || 1)];
 
-  // Draw Space / Flight Canvas
-  const drawFlightCanvas = (currentMult, state, points = []) => {
+  // Initialize Three.js WebGL Scene
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const width = canvas.width;
-    const height = canvas.height;
 
-    ctx.clearRect(0, 0, width, height);
+    const width = window.innerWidth;
+    const height = window.innerHeight;
 
-    // Deep Cosmic Background
-    const bgGrad = ctx.createLinearGradient(0, 0, width, height);
-    bgGrad.addColorStop(0, '#020617');
-    bgGrad.addColorStop(0.6, '#0f172a');
-    bgGrad.addColorStop(1, '#1e1b4b');
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(0, 0, width, height);
+    // 1. Scene & Camera
+    const scene = new THREE.Scene();
+    sceneRef.current = scene;
+    scene.background = new THREE.Color(0x050b18);
+    scene.fog = new THREE.FogExp2(0x050b18, 0.0035);
 
-    // Stars Parallax
-    if (starsRef.current.length > 0) {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-      starsRef.current.forEach(star => {
-        ctx.beginPath();
-        ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
-        ctx.fill();
-        
-        if (state === 'flying') {
-          star.y += star.speed;
-          if (star.y > height) {
-            star.y = 0;
-            star.x = Math.random() * width;
+    const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 2000);
+    camera.position.set(0, 4, 16);
+    camera.lookAt(0, 1, 0);
+    cameraRef.current = camera;
+
+    // 2. Renderer with PBR tone mapping & soft shadows
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      powerPreference: 'high-performance'
+    });
+    rendererRef.current = renderer;
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    // 3. Lighting Setup
+    const ambientLight = new THREE.AmbientLight(0xdbeafe, 0.85);
+    scene.add(ambientLight);
+
+    const sunLight = new THREE.DirectionalLight(0xfffbeb, 2.2);
+    sunLight.position.set(25, 45, 30);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 1024;
+    sunLight.shadow.mapSize.height = 1024;
+    sunLight.shadow.bias = -0.0005;
+    scene.add(sunLight);
+
+    const rimLight = new THREE.DirectionalLight(0x38bdf8, 1.5);
+    rimLight.position.set(-20, 10, -20);
+    scene.add(rimLight);
+
+    // 4. Build Procedural 3D Aerodynamic Aircraft
+    const planeGroup = new THREE.Group();
+    planeGroupRef.current = planeGroup;
+
+    // Metallic PBR fuselage material
+    const fuselageMat = new THREE.MeshStandardMaterial({
+      color: 0xe2e8f0,
+      metalness: 0.88,
+      roughness: 0.18,
+      envMapIntensity: 1.2
+    });
+
+    const darkAccentMat = new THREE.MeshStandardMaterial({
+      color: 0x0284c7, // Sky blue accent
+      metalness: 0.6,
+      roughness: 0.3
+    });
+
+    const chromeMat = new THREE.MeshStandardMaterial({
+      color: 0xf8fafc,
+      metalness: 0.98,
+      roughness: 0.08
+    });
+
+    // Fuselage Body
+    const fuselageGeo = new THREE.CylinderGeometry(0.7, 1.1, 7.5, 32);
+    fuselageGeo.rotateX(Math.PI / 2);
+    const fuselage = new THREE.Mesh(fuselageGeo, fuselageMat);
+    fuselage.castShadow = true;
+    planeGroup.add(fuselage);
+
+    // Nose Cone
+    const noseGeo = new THREE.ConeGeometry(0.7, 2.0, 32);
+    noseGeo.rotateX(Math.PI / 2);
+    const nose = new THREE.Mesh(noseGeo, chromeMat);
+    nose.position.z = 4.65;
+    nose.castShadow = true;
+    planeGroup.add(nose);
+
+    // Glass Canopy (Cockpit)
+    const canopyMat = new THREE.MeshPhysicalMaterial({
+      color: 0x0284c7,
+      transmission: 0.75,
+      roughness: 0.05,
+      metalness: 0.1,
+      transparent: true,
+      opacity: 0.8
+    });
+    const canopyGeo = new THREE.SphereGeometry(0.75, 24, 16);
+    canopyGeo.scale(0.85, 0.65, 2.0);
+    const canopy = new THREE.Mesh(canopyGeo, canopyMat);
+    canopy.position.set(0, 0.72, 1.2);
+    planeGroup.add(canopy);
+
+    // Main Swept Wings
+    const wingShape = new THREE.Shape();
+    wingShape.moveTo(0, 0);
+    wingShape.lineTo(6.5, -2.4);
+    wingShape.lineTo(6.0, -3.2);
+    wingShape.lineTo(0, -1.8);
+    wingShape.closePath();
+
+    const extrudeSettings = { depth: 0.12, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: 0.04, bevelThickness: 0.04 };
+    const wingGeo = new THREE.ExtrudeGeometry(wingShape, extrudeSettings);
+    wingGeo.center();
+
+    // Right wing
+    const rightWing = new THREE.Mesh(wingGeo, fuselageMat);
+    rightWing.position.set(3.5, -0.1, -0.2);
+    rightWing.rotation.x = Math.PI / 2;
+    rightWing.castShadow = true;
+    planeGroup.add(rightWing);
+
+    // Left wing
+    const leftWing = new THREE.Mesh(wingGeo, fuselageMat);
+    leftWing.position.set(-3.5, -0.1, -0.2);
+    leftWing.rotation.x = Math.PI / 2;
+    leftWing.rotation.y = Math.PI;
+    leftWing.castShadow = true;
+    planeGroup.add(leftWing);
+
+    // Navigation lights on wingtips
+    const redLightGeo = new THREE.SphereGeometry(0.12, 12, 8);
+    const redLightMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+    const redLight = new THREE.Mesh(redLightGeo, redLightMat);
+    redLight.position.set(-6.6, 0, -1.5);
+    planeGroup.add(redLight);
+
+    const greenLightMat = new THREE.MeshBasicMaterial({ color: 0x22c55e });
+    const greenLight = new THREE.Mesh(redLightGeo, greenLightMat);
+    greenLight.position.set(6.6, 0, -1.5);
+    planeGroup.add(greenLight);
+
+    // Tail Stabilizer (Vertical Fin)
+    const finShape = new THREE.Shape();
+    finShape.moveTo(0, 0);
+    finShape.lineTo(0.3, 2.2);
+    finShape.lineTo(-1.2, 1.9);
+    finShape.lineTo(-1.6, 0);
+    finShape.closePath();
+    const finGeo = new THREE.ExtrudeGeometry(finShape, extrudeSettings);
+    finGeo.center();
+    const tailFin = new THREE.Mesh(finGeo, darkAccentMat);
+    tailFin.position.set(0, 1.3, -3.4);
+    tailFin.rotation.y = Math.PI / 2;
+    tailFin.castShadow = true;
+    planeGroup.add(tailFin);
+
+    // Tail Horizontal Stabilizers
+    const hTailGeo = new THREE.BoxGeometry(3.6, 0.08, 1.2);
+    const hTail = new THREE.Mesh(hTailGeo, fuselageMat);
+    hTail.position.set(0, 0.35, -3.4);
+    hTail.castShadow = true;
+    planeGroup.add(hTail);
+
+    // Dual Jet Turbines
+    const engineGeo = new THREE.CylinderGeometry(0.42, 0.45, 2.4, 24);
+    engineGeo.rotateX(Math.PI / 2);
+    const leftEngine = new THREE.Mesh(engineGeo, darkAccentMat);
+    leftEngine.position.set(-1.8, -0.4, 0.2);
+    leftEngine.castShadow = true;
+    planeGroup.add(leftEngine);
+
+    const rightEngine = new THREE.Mesh(engineGeo, darkAccentMat);
+    rightEngine.position.set(1.8, -0.4, 0.2);
+    rightEngine.castShadow = true;
+    planeGroup.add(rightEngine);
+
+    // Jet Afterburner Flames (Dual Pulsing Cones)
+    const flameGeo = new THREE.ConeGeometry(0.35, 2.8, 16);
+    flameGeo.rotateX(-Math.PI / 2);
+    const flameMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.9
+    });
+
+    const leftFlame = new THREE.Mesh(flameGeo, flameMat);
+    leftFlame.position.set(-1.8, -0.4, -2.4);
+    planeGroup.add(leftFlame);
+
+    const rightFlame = new THREE.Mesh(flameGeo, flameMat.clone());
+    rightFlame.position.set(1.8, -0.4, -2.4);
+    planeGroup.add(rightFlame);
+    jetFlamesRef.current = [leftFlame, rightFlame];
+
+    // Nose Propeller / Spinner
+    const propGeo = new THREE.BoxGeometry(0.12, 2.4, 0.06);
+    const propMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.9, roughness: 0.2 });
+    const propeller = new THREE.Mesh(propGeo, propMat);
+    propeller.position.z = 5.7;
+    planeGroup.add(propeller);
+    propellerRef.current = propeller;
+
+    planeGroup.position.set(0, 0, 0);
+    scene.add(planeGroup);
+
+    // 5. 3D Stars Points System (Properly referencing starsRef!)
+    const starsCount = 1400;
+    const starsPositions = new Float32Array(starsCount * 3);
+    const starsColors = new Float32Array(starsCount * 3);
+
+    for (let i = 0; i < starsCount; i++) {
+      const i3 = i * 3;
+      starsPositions[i3] = (Math.random() - 0.5) * 600;
+      starsPositions[i3 + 1] = Math.random() * 400 - 50;
+      starsPositions[i3 + 2] = (Math.random() - 0.5) * 600;
+
+      const shade = 0.7 + Math.random() * 0.3;
+      starsColors[i3] = shade;
+      starsColors[i3 + 1] = shade * 0.95;
+      starsColors[i3 + 2] = shade;
+    }
+
+    const starsGeo = new THREE.BufferGeometry();
+    starsGeo.setAttribute('position', new THREE.BufferAttribute(starsPositions, 3));
+    starsGeo.setAttribute('color', new THREE.BufferAttribute(starsColors, 3));
+
+    const starsMat = new THREE.PointsMaterial({
+      size: 1.8,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.15 // Fades in as multiplier climbs!
+    });
+    const stars = new THREE.Points(starsGeo, starsMat);
+    scene.add(stars);
+    starsRef.current = stars;
+
+    // 6. Volumetric Parallax Clouds Group
+    const cloudsGroup = new THREE.Group();
+    cloudsGroupRef.current = cloudsGroup;
+    const cloudMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.95,
+      transparent: true,
+      opacity: 0.35
+    });
+
+    for (let c = 0; c < 24; c++) {
+      const cloudWedge = new THREE.Group();
+      const puffCount = 4 + Math.floor(Math.random() * 4);
+      for (let p = 0; p < puffCount; p++) {
+        const puffGeo = new THREE.DodecahedronGeometry(1.5 + Math.random() * 2.2, 1);
+        const puff = new THREE.Mesh(puffGeo, cloudMat);
+        puff.position.set(
+          (Math.random() - 0.5) * 5,
+          (Math.random() - 0.5) * 1.5,
+          (Math.random() - 0.5) * 4
+        );
+        cloudWedge.add(puff);
+      }
+      cloudWedge.position.set(
+        (Math.random() - 0.5) * 160,
+        -10 - Math.random() * 20,
+        -120 + Math.random() * 240
+      );
+      cloudsGroup.add(cloudWedge);
+    }
+    scene.add(cloudsGroup);
+
+    // 7. Dynamic Contrail Particles (Dual Ribbon Particles)
+    const trailCount = 180;
+    const trailPositions = new Float32Array(trailCount * 3);
+    for (let t = 0; t < trailCount; t++) {
+      trailPositions[t * 3] = (t % 2 === 0 ? -1.8 : 1.8);
+      trailPositions[t * 3 + 1] = -0.4;
+      trailPositions[t * 3 + 2] = -2.5 - t * 0.4;
+    }
+    const trailGeo = new THREE.BufferGeometry();
+    trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+    const trailMat = new THREE.PointsMaterial({
+      color: 0x93c5fd,
+      size: 0.8,
+      transparent: true,
+      opacity: 0.6
+    });
+    const trailParticles = new THREE.Points(trailGeo, trailMat);
+    scene.add(trailParticles);
+    trailParticlesRef.current = trailParticles;
+
+    // 8. Explosion Particles Group (Initialized hidden)
+    const explosionGroup = new THREE.Group();
+    explosionGroupRef.current = explosionGroup;
+    explosionGroup.visible = false;
+    scene.add(explosionGroup);
+
+    // Resize Handler
+    const handleResize = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    };
+    window.addEventListener('resize', handleResize);
+
+    // Render Animation Loop
+    let clock = new THREE.Clock();
+    const animateLoop = () => {
+      const delta = clock.getDelta();
+      const elapsed = clock.getElapsedTime();
+
+      // Spin Propeller rapidly
+      if (propellerRef.current) {
+        propellerRef.current.rotation.z += 45 * delta;
+      }
+
+      // Pulse Jet Flames
+      if (jetFlamesRef.current.length > 0) {
+        const flamePulse = 0.85 + Math.sin(elapsed * 28) * 0.25;
+        jetFlamesRef.current.forEach((flame) => {
+          flame.scale.set(1, 1, flamePulse);
+        });
+      }
+
+      // Drift Clouds backward for speed parallax
+      if (cloudsGroupRef.current) {
+        cloudsGroupRef.current.children.forEach((cloud) => {
+          cloud.position.z += 35 * delta;
+          if (cloud.position.z > 60) {
+            cloud.position.z = -140;
+            cloud.position.x = (Math.random() - 0.5) * 160;
           }
-        }
-      });
-    }
-
-    // Grid Lines
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-    ctx.lineWidth = 1;
-    for (let x = 40; x < width; x += 50) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-      ctx.stroke();
-    }
-    for (let y = 30; y < height; y += 40) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-    }
-
-    const originX = 40;
-    const originY = height - 40;
-
-    // Flight Curve
-    if (points.length > 1) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-      for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i].x, points[i].y);
+        });
       }
 
-      // Neon trajectory line
-      ctx.strokeStyle = state === 'crashed' ? '#ef4444' : '#38bdf8';
-      ctx.lineWidth = 4;
-      ctx.shadowColor = state === 'crashed' ? '#ef4444' : '#38bdf8';
-      ctx.shadowBlur = 12;
-      ctx.stroke();
+      renderer.render(scene, camera);
+      reqIdRef.current = requestAnimationFrame(animateLoop);
+    };
 
-      // Shaded area beneath curve
-      ctx.lineTo(points[points.length - 1].x, originY);
-      ctx.lineTo(points[0].x, originY);
-      ctx.closePath();
-      const areaGrad = ctx.createLinearGradient(0, 0, 0, height);
-      areaGrad.addColorStop(0, state === 'crashed' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(56, 189, 248, 0.25)');
-      areaGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = areaGrad;
-      ctx.fill();
-      ctx.restore();
+    reqIdRef.current = requestAnimationFrame(animateLoop);
 
-      // Rocket or Explosion at curve tip
-      const lastPt = points[points.length - 1];
-      if (state === 'crashed') {
-        // Explosion Starburst
-        ctx.save();
-        ctx.translate(lastPt.x, lastPt.y);
-        for (let i = 0; i < 8; i++) {
-          const a = (i * Math.PI) / 4;
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.lineTo(24 * Math.cos(a), 24 * Math.sin(a));
-          ctx.strokeStyle = i % 2 === 0 ? '#ef4444' : '#f59e0b';
-          ctx.lineWidth = 3;
-          ctx.stroke();
-        }
-        ctx.beginPath();
-        ctx.arc(0, 0, 10, 0, 2 * Math.PI);
-        ctx.fillStyle = '#fee2e2';
-        ctx.fill();
-        ctx.restore();
-      } else {
-        // Flying Rocket Icon
-        ctx.save();
-        ctx.translate(lastPt.x, lastPt.y);
-        ctx.rotate(-0.4);
-
-        // Rocket Exhaust Fire
-        ctx.beginPath();
-        ctx.moveTo(-16, 0);
-        ctx.lineTo(-28, -5);
-        ctx.lineTo(-24, 0);
-        ctx.lineTo(-28, 5);
-        ctx.closePath();
-        ctx.fillStyle = '#f97316';
-        ctx.shadowColor = '#fbbf24';
-        ctx.shadowBlur = 10;
-        ctx.fill();
-
-        // Rocket Body
-        ctx.font = '24px system-ui';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('🚀', 0, 0);
-        ctx.restore();
-      }
-    }
-
-    // Axes
-    ctx.strokeStyle = '#475569';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(originX, 10);
-    ctx.lineTo(originX, originY);
-    ctx.lineTo(width - 10, originY);
-    ctx.stroke();
-
-    // Multiplier Text Overlay
-    ctx.save();
-    ctx.font = '900 48px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    if (state === 'crashed') {
-      ctx.fillStyle = '#ef4444';
-      ctx.shadowColor = '#ef4444';
-      ctx.shadowBlur = 20;
-      ctx.fillText(`💥 ${currentMult.toFixed(2)}x`, width / 2, height / 2 - 20);
-      ctx.font = '700 16px system-ui';
-      ctx.fillStyle = '#fca5a5';
-      ctx.fillText('¡CRASH! EL COHETE EXPLOTÓ', width / 2, height / 2 + 25);
-    } else if (state === 'cashed_out') {
-      ctx.fillStyle = '#4ade80';
-      ctx.shadowColor = '#22c55e';
-      ctx.shadowBlur = 20;
-      ctx.fillText(`💰 ${currentMult.toFixed(2)}x`, width / 2, height / 2 - 20);
-      ctx.font = '700 16px system-ui';
-      ctx.fillStyle = '#86efac';
-      ctx.fillText('¡RETIRADO A TIEMPO!', width / 2, height / 2 + 25);
-    } else if (state === 'flying') {
-      ctx.fillStyle = '#facc15';
-      ctx.shadowColor = '#ca8a04';
-      ctx.shadowBlur = 25;
-      ctx.fillText(`${currentMult.toFixed(2)}x`, width / 2, height / 2 - 20);
-    } else {
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillText('1.00x', width / 2, height / 2 - 20);
-      ctx.font = '700 14px system-ui';
-      ctx.fillStyle = '#64748b';
-      ctx.fillText('LISTO PARA DESPEGAR', width / 2, height / 2 + 20);
-    }
-    ctx.restore();
-  };
-
-  useEffect(() => {
-    drawFlightCanvas(1.00, 'idle');
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (reqIdRef.current) cancelAnimationFrame(reqIdRef.current);
+      disposeThreeScene(scene, renderer);
+    };
   }, []);
 
+  // Handle Rocket / Plane Launch
   const handleLaunchRocket = () => {
     if (gameState === 'flying' || roundOutcome === 'unlucky_challenge') return;
     if (chips < bet) {
@@ -229,65 +421,94 @@ export default function CrashRocketGame({
     setTurnQuestionOverride(null);
     cashedOutMultiplierRef.current = null;
 
-    // Pick crash multiplier using exponential distribution
-    // Ranges generally between 1.25x and 6.00x, with occasional higher spikes
+    // Determine crash threshold (1.20x to 8.50x)
     const rand = Math.random();
-    let crashMult = 1.15 + (1 / (1 - rand * 0.88) - 1) * 0.7;
-    crashMult = Math.min(10.0, Math.max(1.20, crashMult));
+    let crashMult = 1.18 + (1 / (1 - rand * 0.88) - 1) * 0.75;
+    crashMult = Math.min(10.0, Math.max(1.25, crashMult));
     crashPointRef.current = parseFloat(crashMult.toFixed(2));
 
     startTimeRef.current = performance.now();
-    const flightPoints = [{ x: 40, y: 340 - 40 }];
 
-    const canvas = canvasRef.current;
-    const width = canvas ? canvas.width : 440;
-    const height = canvas ? canvas.height : 320;
-    const originX = 40;
-    const originY = height - 40;
+    const plane = planeGroupRef.current;
+    const camera = cameraRef.current;
+    const scene = sceneRef.current;
+    const stars = starsRef.current;
 
-    let currentMult = 1.00;
+    // Reset explosion if any
+    if (explosionGroupRef.current) {
+      explosionGroupRef.current.visible = false;
+    }
 
-    const tick = (now) => {
+    if (plane) {
+      plane.visible = true;
+      plane.position.set(0, 0, 0);
+      plane.rotation.set(0, 0, 0);
+    }
+
+    const flightTick = (now) => {
       const elapsedSeconds = (now - startTimeRef.current) / 1000;
-      // Exponential multiplier growth formula
-      currentMult = 1.00 + Math.pow(elapsedSeconds * 0.9, 1.75);
+      const currentMult = 1.00 + Math.pow(elapsedSeconds * 0.88, 1.78);
       setMultiplier(currentMult);
 
-      // Trajectory curve coordinate
-      const plotProgress = Math.min(1, elapsedSeconds / 6.0);
-      const px = originX + plotProgress * (width - originX - 45);
-      const py = originY - Math.min(originY - 30, Math.pow(plotProgress, 1.4) * (originY - 40));
+      // Smooth Banking & Climb Animation
+      if (plane) {
+        const bankAngle = Math.sin(elapsedSeconds * 1.8) * 0.12;
+        const pitchAngle = Math.min(0.35, 0.05 + elapsedSeconds * 0.04);
+        plane.rotation.z = -bankAngle;
+        plane.rotation.x = -pitchAngle;
 
-      flightPoints.push({ x: px, y: py });
+        // Leve turbulencia de empuje
+        plane.position.y = Math.sin(elapsedSeconds * 6) * 0.25;
+        plane.position.x = Math.sin(elapsedSeconds * 2.2) * 0.45;
+      }
 
+      // Dynamic Sky Transition from Dawn to Stratosphere
+      if (scene && stars) {
+        const altitudeProgress = Math.min(1, (currentMult - 1.0) / 5.0);
+        const skyR = THREE.MathUtils.lerp(0.04, 0.01, altitudeProgress);
+        const skyG = THREE.MathUtils.lerp(0.12, 0.02, altitudeProgress);
+        const skyB = THREE.MathUtils.lerp(0.32, 0.08, altitudeProgress);
+        scene.background.setRGB(skyR, skyG, skyB);
+        scene.fog.color.setRGB(skyR, skyG, skyB);
+
+        // Stars become brighter as plane enters upper atmosphere
+        stars.material.opacity = THREE.MathUtils.lerp(0.15, 0.95, altitudeProgress);
+      }
+
+      // Camera FOV dynamically zooms out with speed
+      if (camera) {
+        camera.fov = 60 + Math.min(22, elapsedSeconds * 3.5);
+        camera.updateProjectionMatrix();
+      }
+
+      // Check if Player Cashed Out
       if (cashedOutMultiplierRef.current !== null) {
-        // Player cashed out successfully!
-        drawFlightCanvas(cashedOutMultiplierRef.current, 'cashed_out', flightPoints);
+        // Safe Victory Ascend
+        if (plane) {
+          plane.position.z += 80 * 0.016;
+          plane.rotation.x = -0.5;
+        }
         return;
       }
 
+      // Check Crash Hit
       if (currentMult >= crashPointRef.current) {
-        // CRASHED!
-        sounds.playExplosion();
-        setGameState('crashed');
-        drawFlightCanvas(crashPointRef.current, 'crashed', flightPoints);
-        evaluateCrash(crashPointRef.current);
+        handleCrashEvent(crashPointRef.current);
       } else {
-        drawFlightCanvas(currentMult, 'flying', flightPoints);
-        animationFrameRef.current = requestAnimationFrame(tick);
+        requestAnimationFrame(flightTick);
       }
     };
 
-    animationFrameRef.current = requestAnimationFrame(tick);
+    requestAnimationFrame(flightTick);
   };
 
+  // Cash Out Safely
   const handleCashOut = () => {
     if (gameState !== 'flying' || cashedOutMultiplierRef.current !== null) return;
 
-    const wonMult = Math.max(1.01, multiplier);
+    const wonMult = Math.max(1.02, multiplier);
     cashedOutMultiplierRef.current = wonMult;
     setGameState('cashed_out');
-    cancelAnimationFrame(animationFrameRef.current);
 
     const payout = Math.round(bet * wonMult);
     onUpdateChips(payout);
@@ -303,17 +524,58 @@ export default function CrashRocketGame({
 
     setRoundOutcome('lucky_exonerated');
     sounds.playJackpot();
-    confetti({ particleCount: 140, spread: 85, origin: { y: 0.6 } });
+    confetti({ particleCount: 160, spread: 90, origin: { y: 0.6 } });
     setWinMessage(
-      `🎉 ¡EXONERADO POR SUERTE EN LUCKY ROCKET! Te retiraste a tiempo en ${wonMult.toFixed(2)}x antes de que explotara. ¡${activeStudent ? activeStudent.name : 'El estudiante'} se salva de la pregunta y cobra +${payout} fichas!`
+      `🎉 ¡EXONERADO POR SUERTE EN AVIATOR 3D! Te retiraste a tiempo en ${wonMult.toFixed(2)}x. ¡${activeStudent ? activeStudent.name : 'El estudiante'} se salva del reto y cobra +${payout} fichas!`
     );
   };
 
-  const evaluateCrash = (finalMult) => {
+  // Trigger Realistic 3D Crash Explosion
+  const handleCrashEvent = (finalMult) => {
+    sounds.playExplosion();
+    setGameState('crashed');
+
+    const plane = planeGroupRef.current;
+    const scene = sceneRef.current;
+
+    if (plane) {
+      plane.visible = false; // Hide plane body on impact
+    }
+
+    // Spawn 3D Explosion Spall
+    if (scene && explosionGroupRef.current) {
+      const expGroup = explosionGroupRef.current;
+      while (expGroup.children.length > 0) {
+        expGroup.remove(expGroup.children[0]);
+      }
+      expGroup.visible = true;
+
+      const flashLight = new THREE.PointLight(0xf97316, 12, 40);
+      flashLight.position.set(0, 0, 0);
+      expGroup.add(flashLight);
+
+      const debrisGeo = new THREE.DodecahedronGeometry(0.35, 1);
+      const debrisMat = new THREE.MeshBasicMaterial({ color: 0xf97316 });
+      for (let i = 0; i < 45; i++) {
+        const debris = new THREE.Mesh(debrisGeo, debrisMat);
+        debris.position.set(
+          (Math.random() - 0.5) * 2,
+          (Math.random() - 0.5) * 2,
+          (Math.random() - 0.5) * 2
+        );
+        debris.userData = {
+          vx: (Math.random() - 0.5) * 25,
+          vy: (Math.random() - 0.5) * 25,
+          vz: (Math.random() - 0.5) * 25
+        };
+        expGroup.add(debris);
+      }
+    }
+
     setRoundOutcome('unlucky_challenge');
     sounds.playWrong();
     setWinMessage(
-      `💥 ¡BOOM! El cohete explotó en ${finalMult.toFixed(2)}x antes de que pudieras retirarte. ¡Debes responder el desafío de inglés para salvar tu turno!`
+      `💥 ¡CRASH @ ${finalMult.toFixed(2)}x! El avión se perdió en la estratosfera antes de cobrar. ¡Debes responder el reto de inglés para defender tu puntuación!`
     );
   };
 
@@ -326,11 +588,11 @@ export default function CrashRocketGame({
           machine: 'crash',
           bet,
           outcome: 'answered_correct',
-          question: q?.question || 'Reto de Lucky Rocket'
+          question: q?.question || 'Reto de Aviator'
         });
       }
       sounds.playCorrect();
-      confetti({ particleCount: 90, spread: 60, origin: { y: 0.6 } });
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
       setWinMessage(`🎯 ¡Excelente! ${activeStudent ? activeStudent.name : 'Respuesta correcta'}. Salvaste tu turno y ganaste +${reward} fichas.`);
     } else {
       sounds.playWrong();
@@ -339,10 +601,10 @@ export default function CrashRocketGame({
           machine: 'crash',
           bet,
           outcome: 'answered_wrong',
-          question: q?.question || 'Reto de Lucky Rocket'
+          question: q?.question || 'Reto de Aviator'
         });
       }
-      setWinMessage('❌ Respuesta incorrecta. ¡La casa retiene las fichas este despegue!');
+      setWinMessage('❌ Respuesta incorrecta. ¡La casa retiene las fichas este vuelo!');
     }
 
     setCurrentQuestionIndex(prev => (prev + 1) % (questions.length || 1));
@@ -372,148 +634,227 @@ export default function CrashRocketGame({
     setWinMessage(null);
     setTurnQuestionOverride(null);
     cashedOutMultiplierRef.current = null;
-    drawFlightCanvas(1.00, 'idle');
+
+    if (planeGroupRef.current) {
+      planeGroupRef.current.visible = true;
+      planeGroupRef.current.position.set(0, 0, 0);
+      planeGroupRef.current.rotation.set(0, 0, 0);
+    }
+    if (cameraRef.current) {
+      cameraRef.current.fov = 60;
+      cameraRef.current.updateProjectionMatrix();
+    }
+    if (sceneRef.current) {
+      sceneRef.current.background.setHex(0x050b18);
+    }
+
     if (onAdvanceStudentTurn) {
       onAdvanceStudentTurn();
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4 md:p-6 animate-fadeIn space-y-6">
-      {/* Top Navigation */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-gray-900/90 border border-sky-500/40 p-4 rounded-3xl backdrop-blur-md shadow-xl">
-        <button
-          onClick={() => {
-            sounds.playTick();
-            onBackToLobby();
-          }}
-          className="flex items-center gap-2 text-gray-300 hover:text-white transition px-3 py-1.5 rounded-xl hover:bg-gray-800 text-sm font-semibold cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4 text-sky-400" />
-          <span>Volver al Lobby</span>
-        </button>
+    <div
+      ref={containerRef}
+      id="game-root"
+      className="fixed inset-0 w-screen h-screen overflow-hidden bg-slate-950 select-none z-40"
+    >
+      {/* CAPA 0: WebGL Three.js Real 3D Fullscreen Canvas */}
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full block z-0 cursor-default"
+      />
 
-        {activeStudent && (
-          <div className="flex items-center gap-2.5 bg-sky-950/60 border border-sky-500/40 px-3.5 py-1.5 rounded-2xl">
-            <span className="text-xl">{activeStudent.avatar || '🎩'}</span>
-            <div className="text-left">
-              <span className="text-[10px] uppercase font-bold text-sky-300 block leading-tight">Piloto en Turno:</span>
-              <span className="text-xs font-black text-white">{activeStudent.name}</span>
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center gap-2 bg-black/60 border border-amber-500/30 px-3.5 py-1.5 rounded-2xl">
-          <Coins className="w-4 h-4 text-yellow-400" />
-          <span className="text-sm font-black text-amber-300 font-mono">
-            {chips.toLocaleString()} Fichas
-          </span>
-        </div>
-      </div>
-
-      {/* Main Crash Stage */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-        {/* Canvas Flight Display */}
-        <div className={`md:col-span-7 bg-gradient-to-b from-gray-900 via-slate-950 to-black border-2 border-sky-500/40 rounded-3xl p-5 shadow-2xl flex flex-col items-center justify-center casino-3d-stage cabinet-3d-shadow ${gameState === 'flying' ? 'rocket-thrust' : ''} ${gameState === 'crashed' ? 'mine-shake' : ''}`}>
-          <div className="w-full flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Rocket className="w-4 h-4 text-yellow-400" />
-              Lucky Rocket Crash Game
-            </span>
-            <span className="text-xs font-mono font-bold text-gray-400">
-              {gameState === 'flying' ? 'EN VUELO ASCENDENTE...' : 'ESTACIÓN DE LANZAMIENTO'}
-            </span>
-          </div>
-
-          <canvas
-            ref={canvasRef}
-            width={400}
-            height={320}
-            className="rounded-2xl border border-gray-800 shadow-inner max-w-full"
-          />
-
-          <p className="text-[11px] text-gray-400 text-center mt-3">
-            El multiplicador sube en tiempo real. ¡Presiona RETIRARSE antes de que el cohete explote para quedar exonerado!
-          </p>
-        </div>
-
-        {/* Controls Column */}
-        <div className="md:col-span-5 bg-gradient-to-b from-gray-900 via-gray-950 to-black border-2 border-sky-500/40 rounded-3xl p-6 shadow-2xl space-y-5">
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/30 text-sky-300 text-xs font-bold uppercase tracking-wider mb-2">
-              <Trophy className="w-3.5 h-3.5 text-yellow-400" />
-              Regla de Exoneración
-            </div>
-            <h3 className="text-xl font-black text-white">
-              🚀 Lucky Rocket (Aviator)
-            </h3>
-            <p className="text-xs text-gray-300 mt-1">
-              Despega el cohete. <strong>¡Si te retiras con éxito antes del Crash, el alumno queda totalmente EXONERADO!</strong> Si explota antes, responde el reto de inglés.
-            </p>
-          </div>
-
-          {/* Bet Selector */}
-          <div>
-            <label className="block text-xs font-bold text-gray-400 mb-1.5">
-              Fichas en Apuesta:
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {[25, 50, 100, 250, 500].map((amt) => (
-                <button
-                  key={amt}
-                  disabled={gameState === 'flying' || roundOutcome === 'unlucky_challenge'}
-                  onClick={() => {
-                    sounds.playChips();
-                    setBet(amt);
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                    bet === amt
-                      ? 'bg-amber-500 text-black shadow-md'
-                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                  }`}
-                >
-                  {amt}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Action Buttons: Launch vs Cash Out */}
-          {gameState === 'idle' && (
+      {/* CAPA 1: UI Overlay Layer (pointer-events: none, controles en auto) */}
+      <div
+        id="ui-layer"
+        className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-3 sm:p-5"
+      >
+        {/* Top Navigation & Pilot Status Bar */}
+        <header className="flex flex-wrap items-center justify-between gap-3 pointer-events-auto">
+          <div className="flex items-center gap-2">
             <button
-              onClick={handleLaunchRocket}
-              disabled={chips < bet}
-              style={{ transform: 'perspective(600px) rotateX(2deg)' }}
-              className="cabinet-3d-shadow w-full py-4 bg-gradient-to-r from-sky-500 via-indigo-600 to-sky-600 hover:from-sky-400 text-white font-black text-base rounded-2xl shadow-xl shadow-sky-950/60 transition transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+              onClick={() => {
+                sounds.playTick();
+                onBackToLobby();
+              }}
+              className="flex items-center gap-2 bg-slate-900/85 hover:bg-slate-800 text-gray-200 hover:text-white border border-sky-500/40 px-3.5 py-2 rounded-2xl backdrop-blur-md shadow-xl text-xs font-bold cursor-pointer transition active:scale-95"
             >
-              <Rocket className="w-5 h-5 text-yellow-300" />
-              <span>DESPEGAR COHETE ({bet} Fichas)</span>
+              <ArrowLeft className="w-4 h-4 text-sky-400" />
+              <span>Lobby</span>
             </button>
+
+            <button
+              onClick={() => {
+                toggleFullscreen(containerRef.current || document.documentElement);
+                setIsFullscreen(prev => !prev);
+              }}
+              className="bg-slate-900/85 hover:bg-slate-800 text-gray-300 hover:text-white border border-gray-700 px-3 py-2 rounded-2xl backdrop-blur-md shadow-xl text-xs font-bold cursor-pointer transition"
+              title="Pantalla Completa"
+            >
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {activeStudent && (
+            <div className="flex items-center gap-2.5 bg-sky-950/80 border border-sky-400/50 px-4 py-1.5 rounded-2xl backdrop-blur-md shadow-lg shadow-sky-950/40">
+              <span className="text-xl">{activeStudent.avatar || '✈️'}</span>
+              <div className="text-left">
+                <span className="text-[10px] uppercase font-bold text-sky-300 block leading-tight">Piloto en Vuelo:</span>
+                <span className="text-xs font-black text-white">{activeStudent.name}</span>
+              </div>
+            </div>
           )}
 
-          {gameState === 'flying' && (
-            <button
-              onClick={handleCashOut}
-              style={{ transform: 'perspective(500px) rotateX(3deg)', boxShadow: '0 8px 30px rgba(16,185,129,0.5), 0 2px 0 #065f46' }}
-              className="metallic-shine relative overflow-hidden w-full py-5 bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-400 text-black font-black text-lg rounded-2xl shadow-2xl shadow-emerald-950/80 animate-pulse transition transform hover:scale-[1.03] active:scale-95 cursor-pointer flex items-center justify-center gap-2 border-2 border-emerald-300"
-            >
-              <Coins className="w-6 h-6 text-black relative z-10" />
-              <span className="relative z-10">COBRAR {Math.round(bet * multiplier)} FICHAS ({multiplier.toFixed(2)}x)</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2 bg-black/75 border border-amber-500/40 px-4 py-1.5 rounded-2xl backdrop-blur-md shadow-lg">
+            <Coins className="w-4 h-4 text-yellow-400" />
+            <span className="text-xs sm:text-sm font-black text-amber-300 font-mono">
+              {chips.toLocaleString()} Fichas
+            </span>
+          </div>
+        </header>
+
+        {/* Central HUD: Floating Multiplier Status */}
+        <main className="flex-1 flex flex-col items-center justify-center pointer-events-none relative">
+          <div className="text-center select-none">
+            {gameState === 'crashed' && (
+              <div className="text-red-500 font-black text-5xl sm:text-7xl tracking-tighter drop-shadow-[0_0_35px_rgba(239,68,68,0.9)] animate-pulse">
+                💥 {multiplier.toFixed(2)}x
+                <p className="text-sm font-bold uppercase tracking-widest text-red-300 mt-2">
+                  ¡CRASH! EL AVIÓN SE PERDIÓ
+                </p>
+              </div>
+            )}
+
+            {gameState === 'cashed_out' && (
+              <div className="text-emerald-400 font-black text-5xl sm:text-7xl tracking-tighter drop-shadow-[0_0_35px_rgba(52,211,153,0.9)] animate-bounce">
+                💰 {multiplier.toFixed(2)}x
+                <p className="text-sm font-bold uppercase tracking-widest text-emerald-200 mt-2">
+                  ¡RETIRADO A TIEMPO CON ÉXITO!
+                </p>
+              </div>
+            )}
+
+            {gameState === 'flying' && (
+              <div className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-400 to-sky-300 font-black text-6xl sm:text-8xl tracking-tighter drop-shadow-[0_0_30px_rgba(250,204,21,0.8)]">
+                {multiplier.toFixed(2)}x
+                <p className="text-xs font-mono font-bold uppercase tracking-widest text-sky-300 mt-1">
+                  ALTITUD Y VELOCIDAD ASCENDIENDO
+                </p>
+              </div>
+            )}
+
+            {gameState === 'idle' && (
+              <div className="text-gray-400/80 font-black text-5xl sm:text-7xl tracking-tighter">
+                1.00x
+                <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mt-1">
+                  PISTA DE DESPEGUE LISTA
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* Win / Feedback message */}
           {winMessage && (
-            <div className={`p-4 rounded-2xl border text-xs md:text-sm leading-relaxed ${
+            <div className={`mt-4 max-w-lg mx-auto p-3.5 rounded-2xl border text-xs md:text-sm font-bold backdrop-blur-md shadow-2xl pointer-events-auto ${
               roundOutcome === 'lucky_exonerated'
-                ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-200'
-                : 'bg-red-950/60 border-red-500/50 text-red-200'
+                ? 'bg-emerald-950/85 border-emerald-400 text-emerald-100 shadow-emerald-950/60'
+                : 'bg-red-950/85 border-red-500 text-red-100 shadow-red-950/60'
             }`}>
               {winMessage}
             </div>
           )}
 
-          {/* Exonerated button */}
+          {/* Unlucky English Challenge Modal */}
+          {roundOutcome === 'unlucky_challenge' && (
+            <div className="w-full max-w-xl mx-auto mt-3 bg-gray-950/95 border-2 border-red-500/80 rounded-3xl p-5 shadow-2xl pointer-events-auto backdrop-blur-md animate-fadeIn space-y-3">
+              <div className="flex items-center justify-between border-b border-gray-800 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-xl bg-red-600/30 text-red-400 border border-red-500/40">
+                    <AlertCircle className="w-4 h-4" />
+                  </span>
+                  <span className="text-xs font-bold text-red-200">
+                    Desafío de Inglés por Crash en Aviator
+                  </span>
+                </div>
+
+                {onGenerateTurnQuestion && (
+                  <button
+                    onClick={handleGenerateLiveQuestion}
+                    disabled={isGeneratingIA}
+                    className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3 h-3 text-yellow-300" />
+                    <span>{isGeneratingIA ? 'Generando...' : 'Reto IA'}</span>
+                  </button>
+                )}
+              </div>
+
+              {currentQuestion && (
+                <QuestionCard
+                  question={currentQuestion}
+                  onAnswer={handleQuestionAnswer}
+                  activeStudent={activeStudent}
+                />
+              )}
+
+              <div className="flex justify-end pt-1">
+                <button
+                  onClick={handleResetForNextRound}
+                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold text-xs rounded-xl transition cursor-pointer"
+                >
+                  Continuar Turno ⏭️
+                </button>
+              </div>
+            </div>
+          )}
+        </main>
+
+        {/* Bottom Control Deck */}
+        <footer className="pointer-events-auto max-w-xl w-full mx-auto pb-2">
+          {gameState === 'idle' && (
+            <div className="bg-slate-900/90 border border-sky-500/40 p-4 rounded-3xl backdrop-blur-md shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <span className="text-xs font-bold text-gray-300">Apuesta:</span>
+                {[25, 50, 100, 250, 500].map((amt) => (
+                  <button
+                    key={amt}
+                    onClick={() => {
+                      sounds.playChips();
+                      setBet(amt);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      bet === amt
+                        ? 'bg-amber-500 text-black shadow-md font-black'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
+                  >
+                    {amt}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={handleLaunchRocket}
+                disabled={chips < bet}
+                className="w-full sm:w-auto px-7 py-3.5 bg-gradient-to-r from-sky-500 via-indigo-600 to-sky-600 hover:from-sky-400 text-white font-black text-sm rounded-2xl shadow-xl shadow-sky-950/80 transition transform hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Rocket className="w-5 h-5 text-yellow-300" />
+                <span>DESPEGAR ({bet} Fichas)</span>
+              </button>
+            </div>
+          )}
+
+          {gameState === 'flying' && (
+            <button
+              onClick={handleCashOut}
+              className="w-full py-4 sm:py-5 bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-400 text-black font-black text-lg sm:text-xl rounded-3xl shadow-2xl shadow-emerald-950/90 animate-pulse transition transform hover:scale-[1.02] active:scale-95 cursor-pointer flex items-center justify-center gap-3 border-2 border-emerald-300"
+            >
+              <Coins className="w-7 h-7 text-black" />
+              <span>COBRAR {Math.round(bet * multiplier)} FICHAS ({multiplier.toFixed(2)}x)</span>
+            </button>
+          )}
+
           {roundOutcome === 'lucky_exonerated' && (
             <button
               onClick={handleResetForNextRound}
@@ -523,62 +864,8 @@ export default function CrashRocketGame({
               <span>Siguiente Turno / Continuar</span>
             </button>
           )}
-        </div>
+        </footer>
       </div>
-
-      {/* Challenge Section on Crash */}
-      {roundOutcome === 'unlucky_challenge' && (
-        <div className="bg-gradient-to-b from-gray-900 via-gray-950 to-black border-2 border-red-500/60 rounded-3xl p-6 shadow-2xl animate-fadeIn space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800 pb-3">
-            <div className="flex items-center gap-2">
-              <span className="p-2 rounded-xl bg-red-600/20 text-red-400 border border-red-500/30">
-                <AlertCircle className="w-5 h-5" />
-              </span>
-              <div>
-                <h4 className="text-base font-black text-white">
-                  Desafío de Inglés por Explosión del Cohete
-                </h4>
-                <p className="text-xs text-gray-400">
-                  {activeStudent ? activeStudent.name : 'El estudiante'} no cobró a tiempo antes del crash. ¡Debe responder el reto para salvar su puntuación!
-                </p>
-              </div>
-            </div>
-
-            {onGenerateTurnQuestion && (
-              <button
-                onClick={handleGenerateLiveQuestion}
-                disabled={isGeneratingIA}
-                className="px-3.5 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white font-bold text-xs rounded-xl shadow transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
-                <span>{isGeneratingIA ? 'Generando con IA...' : 'Generar Otra Pregunta IA (Groq)'}</span>
-              </button>
-            )}
-          </div>
-
-          {currentQuestion ? (
-            <QuestionCard
-              question={currentQuestion}
-              onAnswer={handleQuestionAnswer}
-              activeStudent={activeStudent}
-            />
-          ) : (
-            <div className="text-center py-6 text-gray-400 text-sm">
-              No hay preguntas configuradas para esta actividad.
-            </div>
-          )}
-
-          <div className="flex justify-end pt-2">
-            <button
-              onClick={handleResetForNextRound}
-              className="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold text-xs rounded-xl transition cursor-pointer"
-            >
-              Pasar al Siguiente Alumno ⏭️
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
-
