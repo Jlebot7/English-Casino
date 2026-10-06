@@ -278,19 +278,54 @@ export default function SlotsGame({
         {/* Neon Light Top Border */}
         <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-yellow-400 via-amber-500 to-red-500 animate-pulse" />
 
-        {/* Reels Display Box */}
-        <div className="max-w-md mx-auto my-4 bg-black/80 border-4 border-amber-400/80 rounded-2xl p-4 shadow-inner">
-          <div className="grid grid-cols-3 gap-3 md:gap-4">
-            {reels.map((symbol, idx) => (
-              <div
-                key={idx}
-                className={`h-28 md:h-32 rounded-xl bg-gradient-to-b from-gray-900 to-black border-2 border-amber-500/40 flex items-center justify-center text-5xl md:text-6xl shadow-lg select-none transition-transform ${
-                  isSpinning ? 'scale-95 animate-bounce' : 'scale-100'
-                }`}
-              >
-                {symbol}
-              </div>
-            ))}
+        {/* Slot Machine Cabinet with Animated Side Lever */}
+        <div className="relative max-w-lg mx-auto my-4 flex items-center justify-center">
+          {/* Cabinet Body */}
+          <div className="w-full bg-black/85 border-4 border-amber-400 rounded-3xl p-5 shadow-inner relative overflow-hidden">
+            {/* Flashing Marquee Bulbs Header */}
+            <div className="flex justify-between items-center px-4 mb-3">
+              {[...Array(9)].map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-2.5 h-2.5 rounded-full ${
+                    isSpinning
+                      ? i % 2 === 0 ? 'bg-yellow-300 shadow-[0_0_8px_#fde047]' : 'bg-red-500 shadow-[0_0_8px_#ef4444]'
+                      : 'bg-amber-400/80 shadow-[0_0_4px_#f59e0b]'
+                  } transition-colors duration-200`}
+                />
+              ))}
+            </div>
+
+            {/* Reels Display Box */}
+            <div className="grid grid-cols-3 gap-3 md:gap-4 bg-gradient-to-b from-gray-950 via-gray-900 to-black p-3.5 rounded-2xl border-2 border-amber-500/50 shadow-inner">
+              {reels.map((symbol, idx) => (
+                <div
+                  key={idx}
+                  className={`h-28 md:h-32 rounded-xl bg-gradient-to-b from-gray-900 to-black border-2 ${
+                    roundOutcome === 'lucky_exonerated'
+                      ? 'border-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.5)]'
+                      : 'border-amber-500/40'
+                  } flex items-center justify-center text-5xl md:text-6xl shadow-lg select-none transition-all duration-100 ${
+                    isSpinning ? 'blur-[1.5px] scale-95 animate-pulse' : 'scale-100'
+                  }`}
+                >
+                  {symbol}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Animated Physical Lever on right side */}
+          <div className="hidden sm:flex flex-col items-center ml-2 cursor-pointer select-none" onClick={handleSpinRequest}>
+            <div
+              className={`w-4 bg-gradient-to-b from-gray-400 to-gray-700 rounded-full border border-gray-500 transition-all duration-300 origin-bottom ${
+                isSpinning ? 'h-14 translate-y-8 rotate-12' : 'h-24 hover:scale-105'
+              }`}
+            >
+              {/* Golden Knob at lever top */}
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-600 via-yellow-400 to-amber-200 border-2 border-yellow-200 shadow-lg -translate-x-2 -translate-y-4 hover:shadow-[0_0_12px_#fde047]" />
+            </div>
+            <div className="w-6 h-6 rounded-full bg-gray-900 border-2 border-amber-500 mt-1 shadow-md" />
           </div>
         </div>
 

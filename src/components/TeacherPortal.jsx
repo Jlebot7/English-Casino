@@ -30,8 +30,11 @@ import { sounds } from '../utils/soundEffects';
 const GAME_TYPES = [
   { id: 'all', name: 'Todas las Máquinas (Elección en Sala)' },
   { id: 'slots', name: '🎰 Lucky Slots' },
-  { id: 'roulette', name: '🎡 Ruleta Vegas' },
-  { id: 'blackjack', name: '🃏 21 Blackjack' }
+  { id: 'roulette', name: '🎡 Ruleta Vegas (37 Números)' },
+  { id: 'blackjack', name: '🃏 21 Blackjack' },
+  { id: 'plinko', name: '🟢 Plinko Pyramid' },
+  { id: 'crash', name: '🚀 Lucky Rocket (Crash)' },
+  { id: 'mines', name: '💣 Casino Mines (5×5)' }
 ];
 
 const AVATARS = ['🎩', '👑', '🍀', '🦊', '🤖', '💎', '🎲', '🦁', '⭐', '🚀', '🎯', '🐯', '⚡', '🌸', '🐬'];

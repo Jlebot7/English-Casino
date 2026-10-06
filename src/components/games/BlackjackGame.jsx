@@ -384,7 +384,8 @@ export default function BlackjackGame({
                 return (
                   <div
                     key={idx}
-                    className="w-16 h-24 md:w-20 md:h-28 rounded-xl bg-white border-2 border-gray-300 shadow-xl flex flex-col justify-between p-2 select-none animate-fadeIn"
+                    className="w-16 h-24 md:w-20 md:h-28 rounded-xl bg-white border-2 border-gray-300 shadow-2xl flex flex-col justify-between p-2 select-none transform hover:scale-105 hover:-translate-y-1 transition duration-200 animate-fadeIn"
+                    style={{ transform: `rotate(${(idx - (dealerHand.length - 1) / 2) * 4}deg)` }}
                   >
                     <span className={`text-sm md:text-base font-black ${card.color}`}>{card.value}</span>
                     <span className={`text-2xl md:text-3xl text-center ${card.color}`}>{card.suit}</span>
@@ -401,8 +402,12 @@ export default function BlackjackGame({
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/50 border border-amber-500/40 text-amber-300 text-xs font-bold uppercase mb-3">
             <span>👤 Mano del Alumno</span>
             {playerHand.length > 0 && (
-              <span className="text-black font-mono font-black bg-amber-400 px-2 py-0.5 rounded-full">
-                Puntos: {playerScore}
+              <span className={`font-mono font-black px-2.5 py-0.5 rounded-full ${
+                playerScore === 21
+                  ? 'bg-yellow-400 text-black shadow-[0_0_12px_#facc15]'
+                  : 'bg-amber-400 text-black'
+              }`}>
+                Puntos: {playerScore} {playerScore === 21 ? '🌟 BLACKJACK!' : ''}
               </span>
             )}
           </div>
@@ -414,7 +419,10 @@ export default function BlackjackGame({
               playerHand.map((card, idx) => (
                 <div
                   key={idx}
-                  className="w-16 h-24 md:w-20 md:h-28 rounded-xl bg-white border-2 border-gray-300 shadow-xl flex flex-col justify-between p-2 select-none animate-fadeIn"
+                  className={`w-16 h-24 md:w-20 md:h-28 rounded-xl bg-white border-2 ${
+                    playerScore === 21 ? 'border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.6)]' : 'border-gray-300'
+                  } shadow-2xl flex flex-col justify-between p-2 select-none transform hover:scale-105 hover:-translate-y-1 transition duration-200 animate-fadeIn`}
+                  style={{ transform: `rotate(${(idx - (playerHand.length - 1) / 2) * 5}deg)` }}
                 >
                   <span className={`text-sm md:text-base font-black ${card.color}`}>{card.value}</span>
                   <span className={`text-2xl md:text-3xl text-center ${card.color}`}>{card.suit}</span>

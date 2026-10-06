@@ -1,19 +1,36 @@
 import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
-import { ArrowLeft, Coins, Disc3, CheckCircle2, AlertCircle, Play, Sparkles } from 'lucide-react';
+import { ArrowLeft, Coins, Disc3, CheckCircle2, AlertCircle, Play, Sparkles, Trophy } from 'lucide-react';
 import { sounds } from '../../utils/soundEffects';
 import QuestionCard from '../QuestionCard';
 
-const SLICES = [
-  { id: 'red_1', label: 'Grammar', type: 'red', mult: 2, color: '#dc2626', textColor: '#ffffff' },
-  { id: 'black_1', label: 'Vocabulary', type: 'black', mult: 2, color: '#18181b', textColor: '#fbbf24' },
-  { id: 'red_2', label: 'Speaking', type: 'red', mult: 2, color: '#dc2626', textColor: '#ffffff' },
-  { id: 'black_2', label: 'Pronunciation', type: 'black', mult: 2, color: '#18181b', textColor: '#fbbf24' },
-  { id: 'gold_zero', label: 'GOLD JACKPOT', type: 'gold', mult: 5, color: '#d97706', textColor: '#000000' },
-  { id: 'red_3', label: 'Idioms', type: 'red', mult: 2, color: '#dc2626', textColor: '#ffffff' },
-  { id: 'black_3', label: 'Phrasal Verbs', type: 'black', mult: 2, color: '#18181b', textColor: '#fbbf24' },
-  { id: 'red_4', label: 'Bonus Luck', type: 'red', mult: 2, color: '#dc2626', textColor: '#ffffff' },
+// European Roulette 37 Pockets sequence (0 to 36)
+const WHEEL_NUMBERS = [
+  0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
 ];
+
+const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+const BLACK_NUMBERS = [2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35];
+
+function getNumberColor(num) {
+  if (num === 0) return '#16a34a'; // Green
+  return RED_NUMBERS.includes(num) ? '#dc2626' : '#18181b'; // Red or Black
+}
+
+function getNumberCategory(num) {
+  if (num === 0) {
+    return {
+      parity: 'zero',
+      color: 'green',
+      half: 'zero'
+    };
+  }
+  return {
+    parity: num % 2 === 0 ? 'even' : 'odd',
+    color: RED_NUMBERS.includes(num) ? 'red' : 'black',
+    half: num <= 18 ? 'low' : 'high'
+  };
+}
 
 export default function RouletteGame({
   activity,
@@ -26,10 +43,17 @@ export default function RouletteGame({
   onGenerateTurnQuestion
 }) {
   const canvasRef = useRef(null);
+
+  // Betting state: Bet amount & the 3 criteria choices
   const [bet, setBet] = useState(50);
-  const [betChoice, setBetChoice] = useState('red'); // 'red' | 'black' | 'gold'
+  const [betParity, setBetParity] = useState('even'); // 'even' | 'odd'
+  const [betColor, setBetColor] = useState('red');    // 'red' | 'black'
+  const [betHalf, setBetHalf] = useState('low');      // 'low' (1-18) | 'high' (19-36)
+
+  // Wheel & Ball Animation States
   const [isSpinning, setIsSpinning] = useState(false);
-  const [winningSlice, setWinningSlice] = useState(null);
+  const [winningNumber, setWinningNumber] = useState(null);
+  const [criteriaResults, setCriteriaResults] = useState(null);
 
   // Luck / Exoneration states
   const [roundOutcome, setRoundOutcome] = useState(null); // 'lucky_exonerated' | 'unlucky_challenge' | null
@@ -38,16 +62,20 @@ export default function RouletteGame({
   const [turnQuestionOverride, setTurnQuestionOverride] = useState(null);
   const [isGeneratingIA, setIsGeneratingIA] = useState(false);
 
-  const rotationRef = useRef(0);
-  const lastTickSliceRef = useRef(-1);
+  // Physics animation refs
+  const wheelAngleRef = useRef(0);
+  const ballAngleRef = useRef(0);
+  const ballRadiusRef = useRef(140);
+  const lastBounceTickRef = useRef(-1);
 
   const questions = activity?.questions || [];
   const currentQuestion = turnQuestionOverride || questions[currentQuestionIndex % (questions.length || 1)];
-  const numSlices = SLICES.length;
-  const sliceAngle = (2 * Math.PI) / numSlices;
 
-  // Draw Roulette Wheel
-  const drawWheel = (rotation) => {
+  const totalPockets = WHEEL_NUMBERS.length; // 37
+  const pocketAngle = (2 * Math.PI) / totalPockets;
+
+  // Render Canvas (Wheel + Orbiting Ball)
+  const renderCanvas = (wheelRotation, ballAngle, ballRadius, highlightPocket = null) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -55,89 +83,158 @@ export default function RouletteGame({
     const height = canvas.height;
     const centerX = width / 2;
     const centerY = height / 2;
-    const radius = width / 2 - 14;
+    const outerRadius = width / 2 - 10;
+    const pocketTrackRadius = outerRadius - 38;
+    const innerHubRadius = 42;
 
     ctx.clearRect(0, 0, width, height);
 
-    // Outer Rim
+    // 1. Mahogany / Rosewood Outer Casino Bezel
     ctx.save();
     ctx.beginPath();
-    ctx.arc(centerX, centerY, radius + 10, 0, 2 * Math.PI);
-    ctx.fillStyle = '#b45309';
-    ctx.fill();
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = '#fef08a';
-    ctx.stroke();
-
-    // Rivets
-    const totalRivets = 24;
-    for (let i = 0; i < totalRivets; i++) {
-      const rAngle = (i * 2 * Math.PI) / totalRivets;
-      const rx = centerX + (radius + 5) * Math.cos(rAngle);
-      const ry = centerY + (radius + 5) * Math.sin(rAngle);
-      ctx.beginPath();
-      ctx.arc(rx, ry, 3, 0, 2 * Math.PI);
-      ctx.fillStyle = i % 2 === 0 ? '#fef08a' : '#ffffff';
-      ctx.fill();
-    }
-    ctx.restore();
-
-    // Slices
-    for (let i = 0; i < numSlices; i++) {
-      const startAngle = rotation + i * sliceAngle;
-      const endAngle = startAngle + sliceAngle;
-      const slice = SLICES[i];
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(centerX, centerY);
-      ctx.arc(centerX, centerY, radius, startAngle, endAngle);
-      ctx.closePath();
-      ctx.fillStyle = slice.color;
-      ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#fef08a';
-      ctx.stroke();
-
-      // Text label inside slice
-      ctx.save();
-      ctx.translate(centerX, centerY);
-      ctx.rotate(startAngle + sliceAngle / 2);
-      ctx.textAlign = 'right';
-      ctx.fillStyle = slice.textColor;
-      ctx.font = 'bold 12px system-ui, sans-serif';
-      ctx.shadowColor = 'rgba(0,0,0,0.8)';
-      ctx.shadowBlur = 4;
-      ctx.fillText(slice.label, radius - 20, 5);
-      ctx.restore();
-
-      ctx.restore();
-    }
-
-    // Inner Hub
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 36, 0, 2 * Math.PI);
-    ctx.fillStyle = '#1e293b';
+    ctx.arc(centerX, centerY, outerRadius + 8, 0, 2 * Math.PI);
+    const woodGrad = ctx.createRadialGradient(centerX, centerY, outerRadius - 20, centerX, centerY, outerRadius + 8);
+    woodGrad.addColorStop(0, '#78350f');
+    woodGrad.addColorStop(0.6, '#451a03');
+    woodGrad.addColorStop(1, '#1c1917');
+    ctx.fillStyle = woodGrad;
     ctx.fill();
     ctx.lineWidth = 3;
     ctx.strokeStyle = '#f59e0b';
     ctx.stroke();
 
-    ctx.fillStyle = '#fef08a';
-    ctx.font = 'bold 14px system-ui';
+    // Golden Rivets along outer rim
+    const totalRivets = 24;
+    for (let i = 0; i < totalRivets; i++) {
+      const a = (i * 2 * Math.PI) / totalRivets;
+      const rx = centerX + (outerRadius + 3) * Math.cos(a);
+      const ry = centerY + (outerRadius + 3) * Math.sin(a);
+      ctx.beginPath();
+      ctx.arc(rx, ry, 2.5, 0, 2 * Math.PI);
+      ctx.fillStyle = i % 2 === 0 ? '#fde047' : '#ffffff';
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // 2. Ball Track Ring (Dark Polished Metal)
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, outerRadius - 2, 0, 2 * Math.PI);
+    ctx.fillStyle = '#0f172a';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#334155';
+    ctx.stroke();
+    ctx.restore();
+
+    // 3. Rotating Wheel Head (37 Pockets)
+    ctx.save();
+    for (let i = 0; i < totalPockets; i++) {
+      const startAngle = wheelRotation + i * pocketAngle;
+      const endAngle = startAngle + pocketAngle;
+      const num = WHEEL_NUMBERS[i];
+      const isWinner = highlightPocket === i;
+
+      // Pocket wedge
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.arc(centerX, centerY, pocketTrackRadius, startAngle, endAngle);
+      ctx.closePath();
+
+      if (isWinner) {
+        ctx.fillStyle = '#fbbf24'; // Bright gold highlight for winning number
+      } else {
+        ctx.fillStyle = getNumberColor(num);
+      }
+      ctx.fill();
+
+      // Divider Frets (Metallic separators)
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.stroke();
+
+      // Number Label inside pocket
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.rotate(startAngle + pocketAngle / 2);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = isWinner ? '#000000' : '#ffffff';
+      ctx.font = 'bold 11px system-ui, sans-serif';
+      ctx.shadowColor = 'rgba(0,0,0,0.9)';
+      ctx.shadowBlur = 3;
+      ctx.fillText(num.toString(), pocketTrackRadius - 10, 4);
+      ctx.restore();
+    }
+    ctx.restore();
+
+    // 4. Center Golden Turret / Cone
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, innerHubRadius, 0, 2 * Math.PI);
+    const hubGrad = ctx.createRadialGradient(centerX - 8, centerY - 8, 2, centerX, centerY, innerHubRadius);
+    hubGrad.addColorStop(0, '#fef08a');
+    hubGrad.addColorStop(0.4, '#eab308');
+    hubGrad.addColorStop(1, '#713f12');
+    ctx.fillStyle = hubGrad;
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#fef08a';
+    ctx.stroke();
+
+    // Crossbar handles on turret
+    for (let b = 0; b < 4; b++) {
+      const bAngle = wheelRotation + (b * Math.PI) / 2;
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.lineTo(centerX + 26 * Math.cos(bAngle), centerY + 26 * Math.sin(bAngle));
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#fef08a';
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#1c1917';
+    ctx.font = '900 10px system-ui';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('VEGAS', centerX, centerY - 4);
-    ctx.font = '8px system-ui';
-    ctx.fillText('ROULETTE', centerX, centerY + 10);
+    ctx.fillText('VEGAS', centerX, centerY - 3);
+    ctx.font = '700 7px system-ui';
+    ctx.fillText('ROULETTE', centerX, centerY + 8);
     ctx.restore();
+
+    // 5. Orbiting Roulette Ball (Bolita Real)
+    if (ballRadius > 0) {
+      const bx = centerX + ballRadius * Math.cos(ballAngle);
+      const by = centerY + ballRadius * Math.sin(ballAngle);
+
+      ctx.save();
+      // Ball drop shadow
+      ctx.beginPath();
+      ctx.arc(bx + 2, by + 3, 5.5, 0, 2 * Math.PI);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.fill();
+
+      // Ivory Ball with 3D radial shine
+      ctx.beginPath();
+      ctx.arc(bx, by, 5, 0, 2 * Math.PI);
+      const ballGrad = ctx.createRadialGradient(bx - 1.5, by - 1.5, 1, bx, by, 5);
+      ballGrad.addColorStop(0, '#ffffff');
+      ballGrad.addColorStop(0.7, '#e2e8f0');
+      ballGrad.addColorStop(1, '#94a3b8');
+      ctx.fillStyle = ballGrad;
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.stroke();
+      ctx.restore();
+    }
   };
 
+  // Initial draw
   useEffect(() => {
-    drawWheel(0);
+    renderCanvas(0, 0, 140, null);
   }, []);
 
+  // Spin Roulette Wheel and Simulate Real Orbiting Ball
   const spinRoulette = () => {
     if (isSpinning || roundOutcome === 'unlucky_challenge') return;
     if (chips < bet) {
@@ -147,51 +244,113 @@ export default function RouletteGame({
     }
 
     onUpdateChips(-bet);
-
     sounds.playLever();
+
     setIsSpinning(true);
     setRoundOutcome(null);
     setWinMessage(null);
-    setWinningSlice(null);
+    setWinningNumber(null);
+    setCriteriaResults(null);
     setTurnQuestionOverride(null);
 
-    // Random velocity
-    let velocity = 0.38 + Math.random() * 0.25;
-    const friction = 0.987;
+    // Pick target winning number randomly
+    const targetPocketIndex = Math.floor(Math.random() * totalPockets);
+    const targetNumber = WHEEL_NUMBERS[targetPocketIndex];
+
+    const canvas = canvasRef.current;
+    const outerTrackRadius = (canvas ? canvas.width / 2 : 190) - 20;
+    const pocketRestRadius = outerTrackRadius - 48;
+
+    let wheelSpeed = 0.08 + Math.random() * 0.03;      // Wheel rotates clockwise
+    let ballSpeed = -(0.28 + Math.random() * 0.06);     // Ball orbits counter-clockwise
+    let currentRadius = outerTrackRadius;
+
+    let progress = 0;
+    const totalDurationFrames = 260 + Math.floor(Math.random() * 40);
 
     const animate = () => {
-      rotationRef.current += velocity;
-      velocity *= friction;
+      progress++;
 
-      // Pointer angle check
-      const pointerAngle = (3 * Math.PI / 2 - (rotationRef.current % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-      const currentSliceIdx = Math.floor(pointerAngle / sliceAngle) % numSlices;
+      // Decelerate wheel and ball
+      wheelSpeed *= 0.992;
+      ballSpeed *= 0.988;
 
-      if (currentSliceIdx !== lastTickSliceRef.current) {
-        sounds.playTick();
-        lastTickSliceRef.current = currentSliceIdx;
+      wheelAngleRef.current += wheelSpeed;
+      ballAngleRef.current += ballSpeed;
+
+      // As ball slows down, drop from outer rim inward to pocket
+      if (progress > totalDurationFrames * 0.55) {
+        const dropRatio = (progress - totalDurationFrames * 0.55) / (totalDurationFrames * 0.45);
+        currentRadius = outerTrackRadius - (outerTrackRadius - pocketRestRadius) * Math.min(1, dropRatio * 1.05);
+
+        // Ivory ball bounce sound on frets
+        const currentBallSlice = Math.floor(
+          Math.abs(ballAngleRef.current - wheelAngleRef.current) / pocketAngle
+        ) % totalPockets;
+
+        if (currentBallSlice !== lastBounceTickRef.current && Math.random() > 0.4) {
+          sounds.playBallBounce();
+          lastBounceTickRef.current = currentBallSlice;
+        }
       }
 
-      drawWheel(rotationRef.current);
+      ballRadiusRef.current = currentRadius;
 
-      if (velocity > 0.002) {
+      renderCanvas(wheelAngleRef.current, ballAngleRef.current, ballRadiusRef.current, null);
+
+      if (progress < totalDurationFrames && Math.abs(ballSpeed) > 0.008) {
         requestAnimationFrame(animate);
       } else {
+        // Lock ball into the exact target pocket
+        const pocketCenterAngle = wheelAngleRef.current + targetPocketIndex * pocketAngle + pocketAngle / 2;
+        ballAngleRef.current = pocketCenterAngle;
+        ballRadiusRef.current = pocketRestRadius;
+
+        renderCanvas(wheelAngleRef.current, ballAngleRef.current, ballRadiusRef.current, targetPocketIndex);
+
         setIsSpinning(false);
-        const landedSlice = SLICES[currentSliceIdx];
-        setWinningSlice(landedSlice);
-        evaluateLuck(landedSlice);
+        setWinningNumber(targetNumber);
+        evaluateLuck(targetNumber, targetPocketIndex);
       }
     };
 
     requestAnimationFrame(animate);
   };
 
-  const evaluateLuck = (landedSlice) => {
-    const isLuckyHit = landedSlice.type === betChoice;
+  // Evaluate the 2 of 3 criteria rule for exoneration
+  const evaluateLuck = (num, pocketIdx) => {
+    const cat = getNumberCategory(num);
 
-    if (isLuckyHit) {
-      const payout = Math.round(bet * landedSlice.mult);
+    let matchParity = false;
+    let matchColor = false;
+    let matchHalf = false;
+
+    if (num !== 0) {
+      matchParity = cat.parity === betParity;
+      matchColor = cat.color === betColor;
+      matchHalf = cat.half === betHalf;
+    }
+
+    const matchedCount = (matchParity ? 1 : 0) + (matchColor ? 1 : 0) + (matchHalf ? 1 : 0);
+    const isExonerated = matchedCount >= 2;
+
+    const breakdown = {
+      number: num,
+      color: cat.color,
+      parity: cat.parity,
+      half: cat.half,
+      matchParity,
+      matchColor,
+      matchHalf,
+      matchedCount,
+      isExonerated
+    };
+    setCriteriaResults(breakdown);
+
+    if (isExonerated) {
+      // Exonerated! Payout: 2x for 2 hits, 3.5x for all 3 hits!
+      const multiplier = matchedCount === 3 ? 3.5 : 2.0;
+      const payout = Math.round(bet * multiplier);
       onUpdateChips(payout);
 
       if (onRecordStudentScore && activeStudent) {
@@ -205,15 +364,16 @@ export default function RouletteGame({
 
       setRoundOutcome('lucky_exonerated');
       sounds.playJackpot();
-      confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+      confetti({ particleCount: 140, spread: 85, origin: { y: 0.6 } });
       setWinMessage(
-        `🎉 ¡EXONERADO POR SUERTE! La bolilla cayó en ${landedSlice.label} (${landedSlice.type.toUpperCase()}). ¡${activeStudent ? activeStudent.name : 'El estudiante'} acertó su apuesta, se salva del reto y cobra +${payout} fichas!`
+        `🎉 ¡EXONERADO POR SUERTE! Cayó el número ${num} (${cat.color === 'red' ? 'ROJO' : cat.color === 'black' ? 'NEGRO' : 'VERDE'}) y acertaste ${matchedCount} de 3 criterios. ¡${activeStudent ? activeStudent.name : 'El estudiante'} se salva de responder y cobra +${payout} fichas!`
       );
     } else {
+      // Unlucky! Must answer challenge
       setRoundOutcome('unlucky_challenge');
       sounds.playWrong();
       setWinMessage(
-        `⚠️ ¡Mala suerte! La ruleta cayó en ${landedSlice.label} (${landedSlice.type.toUpperCase()}) y tu apuesta fue ${betChoice.toUpperCase()}. ¡Debes responder el reto de inglés!`
+        `⚠️ ¡Mala suerte! Cayó el número ${num}. Solo acertaste ${matchedCount} de 3 criterios (necesitabas 2 o más). ¡Debes responder el reto de inglés!`
       );
     }
   };
@@ -231,7 +391,7 @@ export default function RouletteGame({
         });
       }
       sounds.playCorrect();
-      confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+      confetti({ particleCount: 90, spread: 60, origin: { y: 0.6 } });
       setWinMessage(`🎯 ¡Excelente! ${activeStudent ? activeStudent.name : 'Respuesta correcta'}. Salvaste tu turno y ganaste +${reward} fichas.`);
     } else {
       sounds.playWrong();
@@ -249,26 +409,28 @@ export default function RouletteGame({
     setCurrentQuestionIndex(prev => (prev + 1) % (questions.length || 1));
   };
 
-  const handleRegenerateTurnQuestion = async () => {
+  const handleGenerateLiveQuestion = async () => {
     if (!onGenerateTurnQuestion) return;
     setIsGeneratingIA(true);
     sounds.playChips();
     try {
-      const newQ = await onGenerateTurnQuestion(activeStudent);
-      if (newQ) {
-        setTurnQuestionOverride(newQ);
-        sounds.playTick();
+      const liveQ = await onGenerateTurnQuestion(activeStudent);
+      if (liveQ) {
+        setTurnQuestionOverride(liveQ);
+        sounds.playCorrect();
       }
     } catch (err) {
-      alert(err.message || 'Error al generar pregunta con IA.');
+      console.error('Error generating AI question:', err);
     } finally {
       setIsGeneratingIA(false);
     }
   };
 
-  const handleNextTurn = () => {
+  const handleResetForNextRound = () => {
     setRoundOutcome(null);
     setWinMessage(null);
+    setWinningNumber(null);
+    setCriteriaResults(null);
     setTurnQuestionOverride(null);
     if (onAdvanceStudentTurn) {
       onAdvanceStudentTurn();
@@ -276,255 +438,346 @@ export default function RouletteGame({
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4 animate-fadeIn space-y-6">
-      {/* Top Header Navigation */}
-      <div className="flex items-center justify-between">
+    <div className="max-w-5xl mx-auto p-4 md:p-6 animate-fadeIn space-y-6">
+      {/* Top Bar Navigation & Active Student */}
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-gray-900/90 border border-blue-500/40 p-4 rounded-3xl backdrop-blur-md shadow-xl">
         <button
-          onClick={onBackToLobby}
-          className="px-3.5 py-2 rounded-xl bg-gray-900 border border-gray-800 hover:border-amber-500/40 text-xs font-bold text-gray-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
+          onClick={() => {
+            sounds.playTick();
+            onBackToLobby();
+          }}
+          className="flex items-center gap-2 text-gray-300 hover:text-white transition px-3 py-1.5 rounded-xl hover:bg-gray-800 text-sm font-semibold cursor-pointer"
         >
-          <ArrowLeft className="w-4 h-4" /> Sala Principal
+          <ArrowLeft className="w-4 h-4 text-blue-400" />
+          <span>Volver al Lobby</span>
         </button>
 
-        <div className="text-center">
-          <h2 className="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-100 uppercase tracking-wider">
-            🎡 Ruleta Vegas
-          </h2>
-          <p className="text-xs text-gray-400">
-            Regla: ¡Predice el color! Si la bolilla acierta, ¡quedas exonerado y cobras!
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="px-3 py-1.5 rounded-xl bg-black/60 border border-amber-500/40 text-amber-400 text-xs font-bold flex items-center gap-1.5">
-            <Coins className="w-4 h-4 text-yellow-400" />
-            <span>{chips.toLocaleString()} Fichas</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Active Student Turn Badge */}
-      {activeStudent && (
-        <div className="p-3 bg-gradient-to-r from-purple-950/60 via-indigo-950/60 to-purple-950/60 border-2 border-purple-500/50 rounded-2xl flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">{activeStudent.avatar || '🎩'}</span>
-            <div>
-              <span className="text-[10px] uppercase font-bold text-purple-300 tracking-wider">Turno en la Ruleta:</span>
-              <h4 className="text-base font-black text-white">{activeStudent.name}</h4>
+        {activeStudent && (
+          <div className="flex items-center gap-2.5 bg-blue-950/60 border border-blue-500/40 px-3.5 py-1.5 rounded-2xl">
+            <span className="text-xl">{activeStudent.avatar || '🎩'}</span>
+            <div className="text-left">
+              <span className="text-[10px] uppercase font-bold text-blue-300 block leading-tight">Turno en Ruleta:</span>
+              <span className="text-xs font-black text-white">{activeStudent.name}</span>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-amber-300 font-bold bg-black/40 px-2.5 py-1 rounded-xl border border-amber-500/20">
-              💰 {activeStudent.chips || 1000} Fichas
-            </span>
-
-            {onGenerateTurnQuestion && (
-              <button
-                onClick={handleRegenerateTurnQuestion}
-                disabled={isGeneratingIA}
-                className="px-3 py-1.5 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow transition cursor-pointer disabled:opacity-50"
-                title="Generar un nuevo reto de inglés para este turno con IA Groq"
-              >
-                <Sparkles className={`w-3.5 h-3.5 text-yellow-300 ${isGeneratingIA ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">{isGeneratingIA ? 'Generando...' : '⚡ Reto IA'}</span>
-              </button>
-            )}
-
-            {onAdvanceStudentTurn && (
-              <button
-                onClick={onAdvanceStudentTurn}
-                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-xs text-gray-300 font-bold rounded-xl border border-gray-700 transition cursor-pointer"
-              >
-                Cambiar Turno ↻
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Roulette Table */}
-      <div className="bg-gradient-to-b from-blue-950/40 via-gray-950 to-black border-4 border-amber-500 rounded-3xl p-6 shadow-2xl relative overflow-hidden text-center">
-        {/* Wheel Canvas Container */}
-        <div className="relative inline-block my-2">
-          {/* Top Pointer */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2 z-20 pointer-events-none drop-shadow-lg">
-            <div className="w-0 h-0 border-l-[14px] border-l-transparent border-r-[14px] border-r-transparent border-t-[24px] border-t-amber-400" />
-          </div>
-
-          <canvas
-            ref={canvasRef}
-            width={340}
-            height={340}
-            className="rounded-full shadow-2xl border-4 border-amber-500/50"
-          />
-        </div>
-
-        {/* Outcome Notification Banner */}
-        {winMessage && (
-          <div className={`max-w-xl mx-auto my-3 p-3.5 rounded-2xl border text-xs md:text-sm font-bold flex items-center justify-center gap-2 animate-fadeIn ${
-            roundOutcome === 'lucky_exonerated'
-              ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200 shadow-lg shadow-emerald-950/40'
-              : 'bg-amber-950/80 border-amber-500 text-amber-200'
-          }`}>
-            {roundOutcome === 'lucky_exonerated' ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-            ) : (
-              <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
-            )}
-            <span>{winMessage}</span>
           </div>
         )}
 
-        {/* Student Variable Choices: Color and Bet */}
-        <div className="max-w-lg mx-auto mt-4 p-4 rounded-2xl bg-black/60 border border-gray-800 space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
-              🎯 Elige tu predicción de la suerte:
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => {
-                  sounds.playTick();
-                  setBetChoice('red');
-                }}
-                disabled={isSpinning || roundOutcome === 'unlucky_challenge'}
-                className={`py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border-2 transition cursor-pointer disabled:opacity-50 ${
-                  betChoice === 'red'
-                    ? 'bg-red-600 border-yellow-400 text-white shadow-lg shadow-red-600/40 scale-105'
-                    : 'bg-red-950/40 border-red-800 text-red-300 hover:bg-red-900/50'
-                }`}
-              >
-                🔴 ROJO (x2)
-              </button>
+        <div className="flex items-center gap-2 bg-black/60 border border-amber-500/30 px-3.5 py-1.5 rounded-2xl">
+          <Coins className="w-4 h-4 text-yellow-400" />
+          <span className="text-sm font-black text-amber-300 font-mono">
+            {chips.toLocaleString()} Fichas
+          </span>
+        </div>
+      </div>
 
-              <button
-                onClick={() => {
-                  sounds.playTick();
-                  setBetChoice('black');
-                }}
-                disabled={isSpinning || roundOutcome === 'unlucky_challenge'}
-                className={`py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border-2 transition cursor-pointer disabled:opacity-50 ${
-                  betChoice === 'black'
-                    ? 'bg-zinc-800 border-yellow-400 text-yellow-300 shadow-lg shadow-zinc-800/40 scale-105'
-                    : 'bg-black/60 border-zinc-700 text-gray-300 hover:bg-zinc-900'
-                }`}
-              >
-                ⚫ NEGRO (x2)
-              </button>
-
-              <button
-                onClick={() => {
-                  sounds.playTick();
-                  setBetChoice('gold');
-                }}
-                disabled={isSpinning || roundOutcome === 'unlucky_challenge'}
-                className={`py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border-2 transition cursor-pointer disabled:opacity-50 ${
-                  betChoice === 'gold'
-                    ? 'bg-amber-500 border-yellow-200 text-black shadow-lg shadow-amber-500/40 scale-105 font-black'
-                    : 'bg-amber-950/40 border-amber-800 text-amber-300 hover:bg-amber-900/50'
-                }`}
-              >
-                🟡 JACKPOT (x5)
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-gray-800">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-gray-400">Apuesta:</span>
-              {[25, 50, 100, 200].map((amount) => (
-                <button
-                  key={amount}
-                  onClick={() => {
-                    sounds.playChips();
-                    setBet(amount);
-                  }}
-                  disabled={isSpinning || roundOutcome === 'unlucky_challenge'}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-50 ${
-                    bet === amount
-                      ? 'bg-amber-500 text-black shadow-md shadow-amber-500/30 font-black scale-105'
-                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
-                  }`}
-                >
-                  {amount}
-                </button>
-              ))}
-            </div>
-
-            {roundOutcome !== 'unlucky_challenge' ? (
-              <button
-                onClick={spinRoulette}
-                disabled={isSpinning}
-                className="px-6 py-2.5 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 text-gray-950 font-black text-sm rounded-2xl shadow-xl shadow-amber-500/30 transition transform hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer flex items-center gap-2"
-              >
-                <Disc3 className="w-4 h-4" />
-                <span>{isSpinning ? '¡Girando Ruleta...!' : '¡GIRAR RULETA!'}</span>
-              </button>
-            ) : (
-              <span className="text-xs text-red-400 font-bold animate-pulse">
-                👇 ¡Responde la pregunta para continuar!
+      {/* Main Roulette Stage */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Column: Canvas Wheel */}
+        <div className="lg:col-span-6 bg-gradient-to-b from-gray-900 via-slate-950 to-black border-2 border-blue-500/40 rounded-3xl p-5 shadow-2xl flex flex-col items-center justify-center relative overflow-hidden">
+          <div className="w-full flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-blue-400 uppercase tracking-widest flex items-center gap-1.5">
+              <Disc3 className="w-4 h-4 text-yellow-400" />
+              Ruleta Europea (37 Números 0-36)
+            </span>
+            {winningNumber !== null && (
+              <span className={`text-xs font-black px-2.5 py-1 rounded-xl text-white ${getNumberColor(winningNumber) === '#dc2626' ? 'bg-red-600' : getNumberColor(winningNumber) === '#18181b' ? 'bg-zinc-800' : 'bg-emerald-600'}`}>
+                Salió: {winningNumber}
               </span>
             )}
           </div>
+
+          <div className="relative my-3">
+            <canvas
+              ref={canvasRef}
+              width={370}
+              height={370}
+              className="rounded-full shadow-2xl border-4 border-amber-500/50 bg-black/80 max-w-full"
+            />
+          </div>
+
+          <p className="text-[11px] text-gray-400 text-center mt-1">
+            {isSpinning
+              ? '🎡 ¡La bolita está girando a toda velocidad por el riel exterior!'
+              : 'La bolita orbitará en sentido contrario y caerá en una de las 37 casillas.'}
+          </p>
         </div>
 
-        {/* Lucky Exoneration Success Actions */}
-        {roundOutcome === 'lucky_exonerated' && (
-          <div className="mt-4 pt-3 border-t border-emerald-800/40 flex justify-center gap-3">
-            <button
-              onClick={handleNextTurn}
-              className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 text-white font-bold text-xs rounded-xl shadow-lg transition transform hover:scale-105 cursor-pointer flex items-center gap-1.5"
-            >
-              <Play className="w-4 h-4 fill-white" />
-              <span>Siguiente Turno / Alumno →</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setRoundOutcome(null);
-                setWinMessage(null);
-              }}
-              className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-amber-300 font-bold text-xs rounded-xl border border-gray-700 transition cursor-pointer"
-            >
-              Girar de nuevo
-            </button>
+        {/* Right Column: 2 of 3 Criteria Betting Board & Controls */}
+        <div className="lg:col-span-6 bg-gradient-to-b from-gray-900 via-gray-950 to-black border-2 border-blue-500/40 rounded-3xl p-6 shadow-2xl space-y-5">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-bold uppercase tracking-wider mb-2">
+              <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
+              Regla de Exoneración
+            </div>
+            <h3 className="text-xl font-black text-white">
+              🎯 Acierta 2 de las 3 Opciones
+            </h3>
+            <p className="text-xs text-gray-300 mt-1">
+              Selecciona tus pronósticos en los 3 criterios clásicos. <strong>¡Si aciertas al menos 2 de los 3 (2/3 o 3/3), quedas totalmente EXONERADO!</strong>
+            </p>
           </div>
-        )}
+
+          {/* Criteria 1: Par o Impar */}
+          <div className="bg-black/50 border border-gray-800 p-3.5 rounded-2xl">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                1. Paridad (Par / Impar)
+              </span>
+              <span className="text-[11px] text-gray-400">Elige uno</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                disabled={isSpinning || roundOutcome === 'unlucky_challenge'}
+                onClick={() => {
+                  sounds.playTick();
+                  setBetParity('even');
+                }}
+                className={`py-2 px-3 rounded-xl font-bold text-xs transition cursor-pointer border ${
+                  betParity === 'even'
+                    ? 'bg-blue-600 border-blue-400 text-white shadow-lg'
+                    : 'bg-gray-800/80 border-gray-700 text-gray-300 hover:bg-gray-750'
+                }`}
+              >
+                ⚖️ PAR (Even)
+              </button>
+              <button
+                disabled={isSpinning || roundOutcome === 'unlucky_challenge'}
+                onClick={() => {
+                  sounds.playTick();
+                  setBetParity('odd');
+                }}
+                className={`py-2 px-3 rounded-xl font-bold text-xs transition cursor-pointer border ${
+                  betParity === 'odd'
+                    ? 'bg-blue-600 border-blue-400 text-white shadow-lg'
+                    : 'bg-gray-800/80 border-gray-700 text-gray-300 hover:bg-gray-750'
+                }`}
+              >
+                🎲 IMPAR (Odd)
+              </button>
+            </div>
+          </div>
+
+          {/* Criteria 2: Rojo o Negro */}
+          <div className="bg-black/50 border border-gray-800 p-3.5 rounded-2xl">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                2. Color (Rojo / Negro)
+              </span>
+              <span className="text-[11px] text-gray-400">Elige uno</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                disabled={isSpinning || roundOutcome === 'unlucky_challenge'}
+                onClick={() => {
+                  sounds.playTick();
+                  setBetColor('red');
+                }}
+                className={`py-2 px-3 rounded-xl font-bold text-xs transition cursor-pointer border ${
+                  betColor === 'red'
+                    ? 'bg-red-600 border-red-400 text-white shadow-lg shadow-red-950/60'
+                    : 'bg-gray-800/80 border-gray-700 text-gray-300 hover:bg-gray-750'
+                }`}
+              >
+                🔴 ROJO (Red)
+              </button>
+              <button
+                disabled={isSpinning || roundOutcome === 'unlucky_challenge'}
+                onClick={() => {
+                  sounds.playTick();
+                  setBetColor('black');
+                }}
+                className={`py-2 px-3 rounded-xl font-bold text-xs transition cursor-pointer border ${
+                  betColor === 'black'
+                    ? 'bg-zinc-800 border-zinc-500 text-amber-400 shadow-lg'
+                    : 'bg-gray-800/80 border-gray-700 text-gray-300 hover:bg-gray-750'
+                }`}
+              >
+                ⚫ NEGRO (Black)
+              </button>
+            </div>
+          </div>
+
+          {/* Criteria 3: 1ra Mitad o 2da Mitad */}
+          <div className="bg-black/50 border border-gray-800 p-3.5 rounded-2xl">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                3. Mitad del Tablero
+              </span>
+              <span className="text-[11px] text-gray-400">1-18 vs 19-36</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                disabled={isSpinning || roundOutcome === 'unlucky_challenge'}
+                onClick={() => {
+                  sounds.playTick();
+                  setBetHalf('low');
+                }}
+                className={`py-2 px-3 rounded-xl font-bold text-xs transition cursor-pointer border ${
+                  betHalf === 'low'
+                    ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg'
+                    : 'bg-gray-800/80 border-gray-700 text-gray-300 hover:bg-gray-750'
+                }`}
+              >
+                🔢 1ra Mitad (1 - 18)
+              </button>
+              <button
+                disabled={isSpinning || roundOutcome === 'unlucky_challenge'}
+                onClick={() => {
+                  sounds.playTick();
+                  setBetHalf('high');
+                }}
+                className={`py-2 px-3 rounded-xl font-bold text-xs transition cursor-pointer border ${
+                  betHalf === 'high'
+                    ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg'
+                    : 'bg-gray-800/80 border-gray-700 text-gray-300 hover:bg-gray-750'
+                }`}
+              >
+                🔟 2da Mitad (19 - 36)
+              </button>
+            </div>
+          </div>
+
+          {/* Bet Selector */}
+          <div>
+            <label className="block text-xs font-bold text-gray-400 mb-1.5">
+              Fichas en Apuesta:
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {[25, 50, 100, 250, 500].map((amt) => (
+                <button
+                  key={amt}
+                  disabled={isSpinning || roundOutcome === 'unlucky_challenge'}
+                  onClick={() => {
+                    sounds.playChips();
+                    setBet(amt);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    bet === amt
+                      ? 'bg-amber-500 text-black shadow-md'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  {amt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Action Spin Button */}
+          {!roundOutcome && (
+            <button
+              onClick={spinRoulette}
+              disabled={isSpinning || chips < bet}
+              className="w-full py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 text-white font-black text-base rounded-2xl shadow-xl shadow-blue-950/60 transition transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+            >
+              <Disc3 className={`w-5 h-5 text-yellow-300 ${isSpinning ? 'animate-spin' : ''}`} />
+              <span>{isSpinning ? 'GIRANDO LA RULETA...' : `LANZAR BOLA (Apostar ${bet} Fichas)`}</span>
+            </button>
+          )}
+
+          {/* Criteria Breakdown Results Display */}
+          {criteriaResults && (
+            <div className={`p-4 rounded-2xl border ${criteriaResults.isExonerated ? 'bg-emerald-950/40 border-emerald-500/50' : 'bg-red-950/40 border-red-500/50'} space-y-2`}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-white">
+                  Resultado del Giro: Número {criteriaResults.number}
+                </span>
+                <span className={`text-xs font-black px-2.5 py-0.5 rounded-full ${criteriaResults.isExonerated ? 'bg-emerald-500 text-black' : 'bg-red-500 text-white'}`}>
+                  {criteriaResults.matchedCount} de 3 Aciertos
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-[11px] pt-1">
+                <div className={`p-2 rounded-xl text-center border ${criteriaResults.matchParity ? 'bg-emerald-900/60 border-emerald-400 text-emerald-200' : 'bg-red-900/40 border-red-400 text-red-200'}`}>
+                  <span className="block font-bold">1. Paridad</span>
+                  <span>{criteriaResults.matchParity ? '✅ Acierto' : '❌ Fallo'}</span>
+                </div>
+                <div className={`p-2 rounded-xl text-center border ${criteriaResults.matchColor ? 'bg-emerald-900/60 border-emerald-400 text-emerald-200' : 'bg-red-900/40 border-red-400 text-red-200'}`}>
+                  <span className="block font-bold">2. Color</span>
+                  <span>{criteriaResults.matchColor ? '✅ Acierto' : '❌ Fallo'}</span>
+                </div>
+                <div className={`p-2 rounded-xl text-center border ${criteriaResults.matchHalf ? 'bg-emerald-900/60 border-emerald-400 text-emerald-200' : 'bg-red-900/40 border-red-400 text-red-200'}`}>
+                  <span className="block font-bold">3. Mitad</span>
+                  <span>{criteriaResults.matchHalf ? '✅ Acierto' : '❌ Fallo'}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Win / Feedback Banner */}
+          {winMessage && (
+            <div className={`p-4 rounded-2xl border text-xs md:text-sm leading-relaxed ${
+              roundOutcome === 'lucky_exonerated'
+                ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-200'
+                : 'bg-red-950/60 border-red-500/50 text-red-200'
+            }`}>
+              {winMessage}
+            </div>
+          )}
+
+          {/* Exonerated: Next student / round button */}
+          {roundOutcome === 'lucky_exonerated' && (
+            <button
+              onClick={handleResetForNextRound}
+              className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 text-white font-black text-sm rounded-2xl shadow-lg transition cursor-pointer flex items-center justify-center gap-2"
+            >
+              <Trophy className="w-4 h-4 text-yellow-300" />
+              <span>Siguiente Turno / Continuar</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Unlucky English Challenge Section */}
-      {roundOutcome === 'unlucky_challenge' && currentQuestion && (
-        <div className="space-y-3 animate-fadeIn">
-          <div className="p-3 bg-red-950/60 border-2 border-red-500/60 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs">
-            <span className="font-bold text-red-200">
-              ⚠️ La ruleta no favoreció tu predicción. ¡Debes superar el siguiente reto pedagógico!
-            </span>
+      {/* Unlucky Challenge Section (English Question Card) */}
+      {roundOutcome === 'unlucky_challenge' && (
+        <div className="bg-gradient-to-b from-gray-900 via-gray-950 to-black border-2 border-red-500/60 rounded-3xl p-6 shadow-2xl animate-fadeIn space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800 pb-3">
+            <div className="flex items-center gap-2">
+              <span className="p-2 rounded-xl bg-red-600/20 text-red-400 border border-red-500/30">
+                <AlertCircle className="w-5 h-5" />
+              </span>
+              <div>
+                <h4 className="text-base font-black text-white">
+                  Desafío de Inglés por Mala Suerte
+                </h4>
+                <p className="text-xs text-gray-400">
+                  {activeStudent ? activeStudent.name : 'El estudiante'} no logró 2 aciertos en la ruleta. ¡Debe responder correctamente para salvar sus fichas!
+                </p>
+              </div>
+            </div>
 
             {onGenerateTurnQuestion && (
               <button
-                type="button"
-                onClick={handleRegenerateTurnQuestion}
+                onClick={handleGenerateLiveQuestion}
                 disabled={isGeneratingIA}
-                className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                className="px-3.5 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white font-bold text-xs rounded-xl shadow transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
               >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>{isGeneratingIA ? 'Generando...' : '⚡ Generar Otro Reto IA'}</span>
+                <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                <span>{isGeneratingIA ? 'Generando con IA...' : 'Generar Otra Pregunta IA (Groq)'}</span>
               </button>
             )}
           </div>
 
-          <QuestionCard
-            question={currentQuestion}
-            questionNumber={(currentQuestionIndex % (questions.length || 1)) + 1}
-            totalQuestions={questions.length}
-            onAnswer={handleQuestionAnswer}
-            activeStudent={activeStudent}
-            showNextButton={true}
-            onNext={handleNextTurn}
-            onRegenerateQuestion={onGenerateTurnQuestion ? handleRegenerateTurnQuestion : null}
-            isRegenerating={isGeneratingIA}
-          />
+          {currentQuestion ? (
+            <QuestionCard
+              question={currentQuestion}
+              onAnswer={handleQuestionAnswer}
+              activeStudent={activeStudent}
+            />
+          ) : (
+            <div className="text-center py-6 text-gray-400 text-sm">
+              No hay preguntas configuradas para esta actividad.
+            </div>
+          )}
+
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={handleResetForNextRound}
+              className="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold text-xs rounded-xl transition cursor-pointer"
+            >
+              Pasar al Siguiente Alumno ⏭️
+            </button>
+          </div>
         </div>
       )}
     </div>

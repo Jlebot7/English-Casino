@@ -119,10 +119,40 @@ export default function StudentSpinnerModal({
     ctx.font = '8px system-ui';
     ctx.fillText('STUDENT', centerX, centerY + 10);
     ctx.restore();
+
+    // Orbiting Ivory Ball
+    if (ballRadiusRef.current > 0) {
+      const bx = centerX + ballRadiusRef.current * Math.cos(ballAngleRef.current);
+      const by = centerY + ballRadiusRef.current * Math.sin(ballAngleRef.current);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(bx + 1.5, by + 2, 6, 0, 2 * Math.PI);
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(bx, by, 5.5, 0, 2 * Math.PI);
+      const ballGrad = ctx.createRadialGradient(bx - 1.5, by - 1.5, 1, bx, by, 5.5);
+      ballGrad.addColorStop(0, '#ffffff');
+      ballGrad.addColorStop(0.7, '#e2e8f0');
+      ballGrad.addColorStop(1, '#94a3b8');
+      ctx.fillStyle = ballGrad;
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.stroke();
+      ctx.restore();
+    }
   }, [numSlices, sliceAngle, students]);
+
+  const ballAngleRef = useRef(0);
+  const ballRadiusRef = useRef(150);
 
   useEffect(() => {
     if (isOpen) {
+      ballAngleRef.current = 0;
+      ballRadiusRef.current = 150;
       drawWheel(0);
     }
   }, [isOpen, drawWheel]);
@@ -136,28 +166,56 @@ export default function StudentSpinnerModal({
     setWinner(null);
     sounds.playLever();
 
-    let velocity = 0.4 + Math.random() * 0.3;
-    const friction = 0.985;
+    const canvas = canvasRef.current;
+    const outerRadius = (canvas ? canvas.width / 2 : 170) - 14;
+    const pocketRestRadius = outerRadius - 32;
+
+    let wheelSpeed = 0.08 + Math.random() * 0.04;
+    let ballSpeed = -(0.25 + Math.random() * 0.08);
+    let progress = 0;
+    const totalFrames = 220 + Math.floor(Math.random() * 40);
 
     const animate = () => {
-      rotationRef.current += velocity;
-      velocity *= friction;
+      progress++;
+      wheelSpeed *= 0.991;
+      ballSpeed *= 0.987;
 
-      const pointerAngle = (3 * Math.PI / 2 - (rotationRef.current % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-      const currentSliceIdx = Math.floor(pointerAngle / sliceAngle) % numSlices;
+      rotationRef.current += wheelSpeed;
+      ballAngleRef.current += ballSpeed;
 
-      if (currentSliceIdx !== lastSliceIdxRef.current) {
-        sounds.playTick();
-        lastSliceIdxRef.current = currentSliceIdx;
+      if (progress > totalFrames * 0.5) {
+        const dropRatio = (progress - totalFrames * 0.5) / (totalFrames * 0.5);
+        ballRadiusRef.current = outerRadius - (outerRadius - pocketRestRadius) * Math.min(1, dropRatio * 1.1);
+
+        const currentSliceIdx = Math.floor(
+          Math.abs(ballAngleRef.current - rotationRef.current) / (sliceAngle || 1)
+        ) % numSlices;
+
+        if (currentSliceIdx !== lastSliceIdxRef.current && Math.random() > 0.45) {
+          sounds.playBallBounce();
+          lastSliceIdxRef.current = currentSliceIdx;
+        }
+      } else {
+        ballRadiusRef.current = outerRadius;
       }
 
       drawWheel(rotationRef.current);
 
-      if (velocity > 0.002) {
+      if (progress < totalFrames && Math.abs(ballSpeed) > 0.008) {
         requestAnimationFrame(animate);
       } else {
         setIsSpinning(false);
-        const selectedStudent = students[currentSliceIdx];
+        // Find pocket where ball rested
+        const finalAngle = (ballAngleRef.current - rotationRef.current) % (2 * Math.PI);
+        const normAngle = (finalAngle + 2 * Math.PI) % (2 * Math.PI);
+        const selectedSliceIdx = Math.floor(normAngle / sliceAngle) % numSlices;
+        const selectedStudent = students[selectedSliceIdx] || students[0];
+
+        // Snap ball to pocket center
+        ballAngleRef.current = rotationRef.current + selectedSliceIdx * sliceAngle + sliceAngle / 2;
+        ballRadiusRef.current = pocketRestRadius;
+        drawWheel(rotationRef.current);
+
         setWinner(selectedStudent);
         sounds.playJackpot();
         confetti({
@@ -207,11 +265,6 @@ export default function StudentSpinnerModal({
         {/* Wheel Canvas Container */}
         {students.length > 0 ? (
           <div className="relative my-2">
-            {/* Top Pointer Indicator */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2 z-20 pointer-events-none drop-shadow-lg">
-              <div className="w-0 h-0 border-l-[14px] border-l-transparent border-r-[14px] border-r-transparent border-t-[24px] border-t-amber-400" />
-            </div>
-
             <canvas
               ref={canvasRef}
               width={340}

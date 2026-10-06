@@ -11,6 +11,9 @@ import TeacherAuthModal from './components/TeacherAuthModal';
 import SlotsGame from './components/games/SlotsGame';
 import RouletteGame from './components/games/RouletteGame';
 import BlackjackGame from './components/games/BlackjackGame';
+import PlinkoGame from './components/games/PlinkoGame';
+import CrashRocketGame from './components/games/CrashRocketGame';
+import MinesGame from './components/games/MinesGame';
 
 import { DEFAULT_ACTIVITIES } from './data/defaultActivities';
 import { 
@@ -591,7 +594,7 @@ export default function App() {
               }}
               onPlayActivity={(act) => {
                 setCurrentActivity(act);
-                if (act.gameType && ['slots', 'roulette', 'blackjack'].includes(act.gameType)) {
+                if (act.gameType && ['slots', 'roulette', 'blackjack', 'plinko', 'crash', 'mines'].includes(act.gameType)) {
                   setActiveGameMachine(act.gameType);
                 }
                 setCurrentView('game');
@@ -662,6 +665,48 @@ export default function App() {
 
             {activeGameMachine === 'blackjack' && (
               <BlackjackGame
+                activity={currentActivity}
+                chips={chips}
+                onUpdateChips={handleUpdateChips}
+                onFinishGame={handleFinishGame}
+                onBackToLobby={() => setCurrentView('lobby')}
+                activeStudent={activeStudent}
+                onRecordStudentScore={handleRecordStudentScore}
+                onAdvanceStudentTurn={handleNextStudent}
+                onGenerateTurnQuestion={handleGenerateTurnQuestion}
+              />
+            )}
+
+            {activeGameMachine === 'plinko' && (
+              <PlinkoGame
+                activity={currentActivity}
+                chips={chips}
+                onUpdateChips={handleUpdateChips}
+                onFinishGame={handleFinishGame}
+                onBackToLobby={() => setCurrentView('lobby')}
+                activeStudent={activeStudent}
+                onRecordStudentScore={handleRecordStudentScore}
+                onAdvanceStudentTurn={handleNextStudent}
+                onGenerateTurnQuestion={handleGenerateTurnQuestion}
+              />
+            )}
+
+            {activeGameMachine === 'crash' && (
+              <CrashRocketGame
+                activity={currentActivity}
+                chips={chips}
+                onUpdateChips={handleUpdateChips}
+                onFinishGame={handleFinishGame}
+                onBackToLobby={() => setCurrentView('lobby')}
+                activeStudent={activeStudent}
+                onRecordStudentScore={handleRecordStudentScore}
+                onAdvanceStudentTurn={handleNextStudent}
+                onGenerateTurnQuestion={handleGenerateTurnQuestion}
+              />
+            )}
+
+            {activeGameMachine === 'mines' && (
+              <MinesGame
                 activity={currentActivity}
                 chips={chips}
                 onUpdateChips={handleUpdateChips}
