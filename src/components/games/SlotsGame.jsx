@@ -140,6 +140,17 @@ export default function SlotsGame({
       setRoundOutcome('unlucky_challenge');
       sounds.playWrong();
       setWinMessage('⚠️ ¡Mala suerte! Los rodillos no coincidieron. ¡Debes responder el reto de inglés para salvar tu turno!');
+
+      // Auto-generate pedagogical turn question on loss based on active session topics
+      if (onGenerateTurnQuestion) {
+        setIsGeneratingIA(true);
+        onGenerateTurnQuestion(activeStudent)
+          .then(newQ => {
+            if (newQ) setTurnQuestionOverride(newQ);
+          })
+          .catch(err => console.error('Error auto-generating loss question in Slots:', err))
+          .finally(() => setIsGeneratingIA(false));
+      }
     }
   };
 
@@ -173,8 +184,6 @@ export default function SlotsGame({
       }
       setWinMessage('❌ Respuesta incorrecta. No te preocupes, ¡la práctica hace al maestro!');
     }
-
-    setCurrentQuestionIndex(prev => (prev + 1) % (questions.length || 1));
   };
 
   // On demand question regeneration using Groq AI
@@ -199,6 +208,7 @@ export default function SlotsGame({
     setRoundOutcome(null);
     setWinMessage(null);
     setTurnQuestionOverride(null);
+    setCurrentQuestionIndex(prev => (prev + 1) % (questions.length || 1));
     if (onAdvanceStudentTurn) {
       onAdvanceStudentTurn();
     }
@@ -422,11 +432,11 @@ export default function SlotsGame({
       </div>
 
       {/* Unlucky English Challenge Section */}
-      {roundOutcome === 'unlucky_challenge' && currentQuestion && (
+      {roundOutcome === 'unlucky_challenge' && (
         <div className="space-y-3 animate-fadeIn">
           <div className="p-3 bg-red-950/60 border-2 border-red-500/60 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs">
             <span className="font-bold text-red-200">
-              ⚠️ Al no coincidir los rodillos, el estudiante debe responder el siguiente desafío de inglés:
+              {isGeneratingIA ? 'Generando reto pedagógico con IA...' : '⚠️ Al no coincidir los rodillos, el estudiante debe responder el siguiente desafío de inglés:'}
             </span>
 
             {onGenerateTurnQuestion && (
@@ -436,23 +446,36 @@ export default function SlotsGame({
                 disabled={isGeneratingIA}
                 className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
               >
-                <Sparkles className="w-3.5 h-3.5" />
+                <Sparkles className={`w-3.5 h-3.5 ${isGeneratingIA ? 'animate-spin' : ''}`} />
                 <span>{isGeneratingIA ? 'Generando...' : '⚡ Generar Otro Reto IA'}</span>
               </button>
             )}
           </div>
 
-          <QuestionCard
-            question={currentQuestion}
-            questionNumber={(currentQuestionIndex % (questions.length || 1)) + 1}
-            totalQuestions={questions.length}
-            onAnswer={handleQuestionAnswer}
-            activeStudent={activeStudent}
-            showNextButton={true}
-            onNext={handleNextTurn}
-            onRegenerateQuestion={onGenerateTurnQuestion ? handleRegenerateTurnQuestion : null}
-            isRegenerating={isGeneratingIA}
-          />
+          {isGeneratingIA && !turnQuestionOverride ? (
+            <div className="p-8 text-center bg-purple-950/30 border border-purple-500/30 rounded-2xl animate-pulse space-y-2">
+              <Sparkles className="w-8 h-8 text-yellow-400 mx-auto animate-spin" />
+              <p className="text-sm font-bold text-purple-200">Generando reto pedagógico para {activeStudent ? activeStudent.name : 'el estudiante'}...</p>
+              <p className="text-xs text-purple-400">Creando pregunta adaptada a los temas activos de la sesión</p>
+            </div>
+          ) : currentQuestion ? (
+            <QuestionCard
+              key={currentQuestion.id || currentQuestionIndex}
+              question={currentQuestion}
+              questionNumber={(currentQuestionIndex % (questions.length || 1)) + 1}
+              totalQuestions={questions.length}
+              onAnswer={handleQuestionAnswer}
+              activeStudent={activeStudent}
+              showNextButton={true}
+              onNext={handleNextTurn}
+              onRegenerateQuestion={onGenerateTurnQuestion ? handleRegenerateTurnQuestion : null}
+              isRegenerating={isGeneratingIA}
+            />
+          ) : (
+            <div className="text-center py-6 text-gray-400 text-sm">
+              No hay preguntas configuradas para esta actividad.
+            </div>
+          )}
         </div>
       )}
     </div>

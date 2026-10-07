@@ -62,7 +62,8 @@ function getInitialSession(classroomId, classroomName) {
     date: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }),
     classroomId,
     classroomName,
-    topic: 'Past Simple & Irregular Verbs',
+    topics: ['Past Simple', 'Irregular Verbs'],
+    topic: 'Past Simple, Irregular Verbs',
     level: 'B1',
     challengeType: 'random',
     customNotes: '',
@@ -393,26 +394,39 @@ export default function App() {
   // Real-time Single Turn Question Generator via Groq AI
   const handleGenerateTurnQuestion = async (student = activeStudent) => {
     if (!groqApiKey) {
-      alert('Por favor configura tu Groq API Key en Ajustes primero.');
-      setIsSettingsOpen(true);
+      console.warn('Groq API Key no configurada; no se puede generar pregunta en tiempo real.');
       return null;
     }
 
-    const currentTopic = activeSession?.topic || currentActivity?.title || 'General English';
+    // Support multiple topics configured by the teacher:
+    let currentTopic = 'General English';
+    if (Array.isArray(activeSession?.topics) && activeSession.topics.length > 0) {
+      currentTopic = activeSession.topics;
+    } else if (activeSession?.topic) {
+      currentTopic = activeSession.topic;
+    } else if (currentActivity?.title) {
+      currentTopic = currentActivity.title;
+    }
+
     const currentLevel = activeSession?.level || currentActivity?.level || 'B1';
     const currentType = activeSession?.challengeType || 'random';
     const currentNotes = activeSession?.customNotes || '';
 
-    const newQ = await generateSingleTurnQuestion({
-      apiKey: groqApiKey,
-      topic: currentTopic,
-      level: currentLevel,
-      challengeType: currentType,
-      studentName: student?.name || 'Estudiante',
-      customInstructions: currentNotes
-    });
+    try {
+      const newQ = await generateSingleTurnQuestion({
+        apiKey: groqApiKey,
+        topic: currentTopic,
+        level: currentLevel,
+        challengeType: currentType,
+        studentName: student?.name || 'Estudiante',
+        customInstructions: currentNotes
+      });
 
-    return newQ;
+      return newQ;
+    } catch (err) {
+      console.error('Error generating turn question with Groq:', err);
+      return null;
+    }
   };
 
   // Load activities from Firebase or LocalStorage

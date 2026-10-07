@@ -14,14 +14,10 @@ import {
   FileQuestion,
   Calendar,
   History,
-  CheckCircle2,
-  AlertCircle,
   RotateCcw,
   Edit2,
   Eye,
-  EyeOff,
-  Flame,
-  Award
+  Flame
 } from 'lucide-react';
 import { generateEnglishQuiz, generateSingleTurnQuestion, GROQ_MODELS, CHALLENGE_TYPES } from '../services/groqService';
 import { saveActivity, deleteActivity, generateGamePin } from '../services/firebaseService';
@@ -92,6 +88,70 @@ export default function TeacherPortal({
   const [showBulkInput, setShowBulkInput] = useState(false);
   const [editingStudentId, setEditingStudentId] = useState(null);
   const [editingStudentName, setEditingStudentName] = useState('');
+
+  // Multi-topic management for Session
+  const [newTopicInput, setNewTopicInput] = useState('');
+
+  const PRESET_TOPICS = [
+    'Past Simple',
+    'Present Perfect',
+    'Conditionals (0, 1st, 2nd)',
+    'Passive Voice',
+    'Modal Verbs',
+    'Phrasal Verbs',
+    'Irregular Verbs',
+    'Food & Restaurant',
+    'Travel & Directions',
+    'Daily Routines'
+  ];
+
+  const getSessionTopics = () => {
+    if (Array.isArray(activeSession?.topics) && activeSession.topics.length > 0) {
+      return activeSession.topics;
+    }
+    if (activeSession?.topic) {
+      return activeSession.topic.split(',').map(t => t.trim()).filter(Boolean);
+    }
+    return ['Past Simple & Irregular Verbs'];
+  };
+
+  const handleAddTopicToSession = (topicName) => {
+    const trimmed = (topicName || '').trim();
+    if (!trimmed) return;
+    const current = getSessionTopics();
+    if (!current.includes(trimmed)) {
+      const updated = [...current, trimmed];
+      if (onUpdateActiveSession) {
+        onUpdateActiveSession({
+          ...activeSession,
+          topics: updated,
+          topic: updated.join(', ')
+        });
+      }
+    }
+    setNewTopicInput('');
+  };
+
+  const handleRemoveTopicFromSession = (topicToRemove) => {
+    const current = getSessionTopics();
+    const updated = current.filter(t => t !== topicToRemove);
+    if (onUpdateActiveSession) {
+      onUpdateActiveSession({
+        ...activeSession,
+        topics: updated,
+        topic: updated.join(', ')
+      });
+    }
+  };
+
+  const handleToggleTopicPreset = (preset) => {
+    const current = getSessionTopics();
+    if (current.includes(preset)) {
+      handleRemoveTopicFromSession(preset);
+    } else {
+      handleAddTopicToSession(preset);
+    }
+  };
 
   // Selected session to inspect from history
   const [inspectingSession, setInspectingSession] = useState(null);
@@ -503,24 +563,6 @@ export default function TeacherPortal({
                 </select>
               </div>
 
-              {/* Session Topic */}
-              <div>
-                <label className="block text-xs font-bold text-amber-400 mb-1">
-                  Tema Central de la Sesión (English Topic) *
-                </label>
-                <input
-                  type="text"
-                  value={activeSession?.topic || ''}
-                  onChange={(e) => {
-                    if (onUpdateActiveSession) {
-                      onUpdateActiveSession({ ...activeSession, topic: e.target.value });
-                    }
-                  }}
-                  placeholder="ej. Past Simple vs Past Continuous, Irregular Verbs, Restaurant Vocabulary..."
-                  className="w-full bg-black/60 border border-amber-500/40 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-xs text-white font-bold focus:outline-none"
-                />
-              </div>
-
               {/* CEFR Level */}
               <div>
                 <label className="block text-xs font-bold text-gray-300 mb-1">
@@ -544,9 +586,9 @@ export default function TeacherPortal({
               </div>
 
               {/* Challenge Type / Variantes */}
-              <div>
+              <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-amber-400 mb-1">
-                  Variante de Preguntas para esta Sesión
+                  Formato Pedagógico de las Preguntas en Pérdida
                 </label>
                 <select
                   value={activeSession?.challengeType || 'random'}
@@ -558,9 +600,104 @@ export default function TeacherPortal({
                   className="w-full bg-black/60 border border-amber-500/50 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-xs text-white font-bold focus:outline-none"
                 >
                   {CHALLENGE_TYPES.map(ct => (
-                    <option key={ct.id} value={ct.id}>{ct.name}</option>
+                    <option key={ct.id} value={ct.id}>{ct.name} — {ct.desc}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* Multi-Topic Section for Session */}
+              <div className="md:col-span-2 p-4 rounded-2xl bg-black/40 border border-amber-500/30 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <label className="block text-xs font-bold text-amber-300">
+                      🎯 Temas de la Sesión para Generación con IA (Uno o Varios) *
+                    </label>
+                    <p className="text-[11px] text-gray-400">
+                      Si el alumno pierde en un juego, Groq IA generará automáticamente preguntas rotando entre estos temas.
+                    </p>
+                  </div>
+                  <span className="text-xs bg-amber-950/80 text-amber-300 border border-amber-500/40 px-2.5 py-0.5 rounded-full font-bold">
+                    {getSessionTopics().length} tema(s) configurado(s)
+                  </span>
+                </div>
+
+                {/* Selected Topics Chips */}
+                <div className="flex flex-wrap gap-2 min-h-[32px] p-2 bg-slate-950/80 rounded-xl border border-gray-800">
+                  {getSessionTopics().map((tName, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-200 border border-amber-500/50 text-xs font-bold shadow-sm"
+                    >
+                      <span>📚 {tName}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTopicFromSession(tName)}
+                        className="text-amber-400 hover:text-red-400 font-black ml-0.5 cursor-pointer"
+                        title="Quitar tema"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                  {getSessionTopics().length === 0 && (
+                    <span className="text-xs text-gray-500 italic p-1">
+                      No has seleccionado ningún tema. Agrega uno abajo o usa los botones rápidos.
+                    </span>
+                  )}
+                </div>
+
+                {/* Custom Topic Input */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newTopicInput}
+                    onChange={(e) => setNewTopicInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddTopicToSession(newTopicInput);
+                      }
+                    }}
+                    placeholder="Escribe un tema específico (ej. Third Conditional, Phrasal Verbs with 'Get', Hotel Vocabulary)..."
+                    className="flex-1 bg-black/60 border border-gray-700 focus:border-amber-400 rounded-xl px-3.5 py-2 text-xs text-white font-medium focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddTopicToSession(newTopicInput)}
+                    disabled={!newTopicInput.trim()}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black font-black text-xs rounded-xl shadow transition cursor-pointer flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Agregar</span>
+                  </button>
+                </div>
+
+                {/* Quick Presets Bar */}
+                <div>
+                  <span className="block text-[11px] font-bold text-gray-400 mb-1.5">
+                    ⚡ Selección rápida de temas frecuentes:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PRESET_TOPICS.map((preset) => {
+                      const isSelected = getSessionTopics().includes(preset);
+                      return (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => handleToggleTopicPreset(preset)}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer border ${
+                            isSelected
+                              ? 'bg-amber-500 text-black border-amber-300 shadow-md font-black'
+                              : 'bg-gray-900 hover:bg-gray-800 text-gray-300 border-gray-700'
+                          }`}
+                        >
+                          {isSelected ? '✓ ' : '+ '}
+                          {preset}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
 
               {/* Custom Teacher Guidance */}

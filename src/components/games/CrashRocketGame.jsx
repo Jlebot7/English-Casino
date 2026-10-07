@@ -577,6 +577,17 @@ export default function CrashRocketGame({
     setWinMessage(
       `💥 ¡CRASH @ ${finalMult.toFixed(2)}x! El avión se perdió en la estratosfera antes de cobrar. ¡Debes responder el reto de inglés para defender tu puntuación!`
     );
+
+    // Auto-generate pedagogical turn question on crash based on active session topics
+    if (onGenerateTurnQuestion) {
+      setIsGeneratingIA(true);
+      onGenerateTurnQuestion(activeStudent)
+        .then(newQ => {
+          if (newQ) setTurnQuestionOverride(newQ);
+        })
+        .catch(err => console.error('Error auto-generating loss question in Aviator:', err))
+        .finally(() => setIsGeneratingIA(false));
+    }
   };
 
   const handleQuestionAnswer = (isCorrect, selected, q) => {
@@ -606,8 +617,6 @@ export default function CrashRocketGame({
       }
       setWinMessage('❌ Respuesta incorrecta. ¡La casa retiene las fichas este vuelo!');
     }
-
-    setCurrentQuestionIndex(prev => (prev + 1) % (questions.length || 1));
   };
 
   const handleGenerateLiveQuestion = async () => {
@@ -633,6 +642,7 @@ export default function CrashRocketGame({
     setRoundOutcome(null);
     setWinMessage(null);
     setTurnQuestionOverride(null);
+    setCurrentQuestionIndex(prev => (prev + 1) % (questions.length || 1));
     cashedOutMultiplierRef.current = null;
 
     if (planeGroupRef.current) {
@@ -774,7 +784,7 @@ export default function CrashRocketGame({
                     <AlertCircle className="w-4 h-4" />
                   </span>
                   <span className="text-xs font-bold text-red-200">
-                    Desafío de Inglés por Crash en Aviator
+                    {isGeneratingIA ? 'Generando reto de inglés con IA...' : 'Desafío de Inglés por Crash en Aviator'}
                   </span>
                 </div>
 
@@ -784,18 +794,29 @@ export default function CrashRocketGame({
                     disabled={isGeneratingIA}
                     className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50 flex items-center gap-1"
                   >
-                    <Sparkles className="w-3 h-3 text-yellow-300" />
+                    <Sparkles className={`w-3 h-3 text-yellow-300 ${isGeneratingIA ? 'animate-spin' : ''}`} />
                     <span>{isGeneratingIA ? 'Generando...' : 'Reto IA'}</span>
                   </button>
                 )}
               </div>
 
-              {currentQuestion && (
+              {isGeneratingIA && !turnQuestionOverride ? (
+                <div className="p-8 text-center bg-purple-950/30 border border-purple-500/30 rounded-2xl animate-pulse space-y-2">
+                  <Sparkles className="w-8 h-8 text-yellow-400 mx-auto animate-spin" />
+                  <p className="text-sm font-bold text-purple-200">Generando reto pedagógico para {activeStudent ? activeStudent.name : 'el estudiante'}...</p>
+                  <p className="text-xs text-purple-400">Creando pregunta adaptada a los temas activos de la sesión</p>
+                </div>
+              ) : currentQuestion ? (
                 <QuestionCard
+                  key={currentQuestion.id || currentQuestionIndex}
                   question={currentQuestion}
                   onAnswer={handleQuestionAnswer}
                   activeStudent={activeStudent}
                 />
+              ) : (
+                <div className="text-center py-4 text-gray-400 text-xs">
+                  No hay preguntas configuradas para esta actividad.
+                </div>
               )}
 
               <div className="flex justify-end pt-1">

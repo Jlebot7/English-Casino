@@ -519,6 +519,17 @@ export default function MinesGame({
         setRoundOutcome('unlucky_challenge');
         sounds.playWrong();
         setWinMessage('💥 ¡BOOM! Pisaste una mina oculta. ¡Mala suerte! Responde el reto de inglés para defender tu turno.');
+
+        // Auto-generate pedagogical turn question on loss based on session topics
+        if (onGenerateTurnQuestion) {
+          setIsGeneratingIA(true);
+          onGenerateTurnQuestion(activeStudent)
+            .then(newQ => {
+              if (newQ) setTurnQuestionOverride(newQ);
+            })
+            .catch(err => console.error('Error auto-generating loss question in Mines:', err))
+            .finally(() => setIsGeneratingIA(false));
+        }
       } else {
         // Gem Found!
         sounds.playCoin();
@@ -621,8 +632,6 @@ export default function MinesGame({
       }
       setWinMessage('❌ Respuesta incorrecta. ¡La casa retiene las fichas este turno!');
     }
-
-    setCurrentQuestionIndex(prev => (prev + 1) % (questions.length || 1));
   };
 
   const handleGenerateLiveQuestion = async () => {
@@ -649,6 +658,7 @@ export default function MinesGame({
     setRoundOutcome(null);
     setWinMessage(null);
     setTurnQuestionOverride(null);
+    setCurrentQuestionIndex(prev => (prev + 1) % (questions.length || 1));
 
     // Reset 3D board
     const scene = sceneRef.current;
@@ -763,14 +773,14 @@ export default function MinesGame({
           )}
 
           {/* Unlucky English Challenge */}
-          {roundOutcome === 'unlucky_challenge' && currentQuestion && (
+          {roundOutcome === 'unlucky_challenge' && (
             <div className="pointer-events-auto w-full bg-gray-950/95 border-2 border-red-500/70 rounded-3xl p-4 shadow-2xl backdrop-blur-md animate-fadeIn space-y-3">
               <div className="flex items-center justify-between border-b border-gray-800 pb-2">
                 <div className="flex items-center gap-2 text-xs font-bold text-red-200">
                   <span className="p-1 rounded-lg bg-red-600/30 text-red-400 border border-red-500/30">
                     <AlertCircle className="w-4 h-4" />
                   </span>
-                  <span>Reto de Inglés por Detonación de Mina</span>
+                  <span>{isGeneratingIA ? 'Generando reto de inglés con IA...' : 'Reto de Inglés por Detonación de Mina'}</span>
                 </div>
 
                 {onGenerateTurnQuestion && (
@@ -779,17 +789,30 @@ export default function MinesGame({
                     disabled={isGeneratingIA}
                     className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50 flex items-center gap-1"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                    <Sparkles className={`w-3.5 h-3.5 text-yellow-300 ${isGeneratingIA ? 'animate-spin' : ''}`} />
                     <span>{isGeneratingIA ? 'Generando...' : 'Reto IA'}</span>
                   </button>
                 )}
               </div>
 
-              <QuestionCard
-                question={currentQuestion}
-                onAnswer={handleQuestionAnswer}
-                activeStudent={activeStudent}
-              />
+              {isGeneratingIA && !turnQuestionOverride ? (
+                <div className="p-8 text-center bg-purple-950/30 border border-purple-500/30 rounded-2xl animate-pulse space-y-2">
+                  <Sparkles className="w-8 h-8 text-yellow-400 mx-auto animate-spin" />
+                  <p className="text-sm font-bold text-purple-200">Generando reto pedagógico para {activeStudent ? activeStudent.name : 'el estudiante'}...</p>
+                  <p className="text-xs text-purple-400">Creando pregunta adaptada a los temas activos de la sesión</p>
+                </div>
+              ) : currentQuestion ? (
+                <QuestionCard
+                  key={currentQuestion.id || currentQuestionIndex}
+                  question={currentQuestion}
+                  onAnswer={handleQuestionAnswer}
+                  activeStudent={activeStudent}
+                />
+              ) : (
+                <div className="text-center py-4 text-gray-400 text-xs">
+                  No hay preguntas configuradas para esta actividad.
+                </div>
+              )}
 
               <div className="flex justify-end pt-1">
                 <button

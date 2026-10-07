@@ -1,5 +1,20 @@
-import React, { useState } from 'react';
-import { Volume2, CheckCircle, XCircle, Sparkles, HelpCircle, Award, Eye, EyeOff, ThumbsUp, ThumbsDown, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { 
+  Volume2, 
+  CheckCircle, 
+  XCircle, 
+  Sparkles, 
+  HelpCircle, 
+  Award, 
+  Eye, 
+  EyeOff, 
+  ThumbsUp, 
+  ThumbsDown, 
+  RefreshCw,
+  BookOpen,
+  Edit3,
+  ListFilter
+} from 'lucide-react';
 import { tts } from '../utils/tts';
 import { sounds } from '../utils/soundEffects';
 
@@ -19,6 +34,15 @@ export default function QuestionCard({
   const [hasAnswered, setHasAnswered] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showModelAnswer, setShowModelAnswer] = useState(false);
+  const [studentDraft, setStudentDraft] = useState('');
+
+  // Reset internal state when a new question arrives with a different ID
+  useEffect(() => {
+    setSelectedOption(null);
+    setHasAnswered(false);
+    setShowModelAnswer(false);
+    setStudentDraft('');
+  }, [question?.id]);
 
   if (!question) return null;
 
@@ -51,8 +75,8 @@ export default function QuestionCard({
     }
   };
 
-  // Oral teacher grading (✅ / ❌)
-  const handleOralGrade = (isCorrect) => {
+  // Teacher oral or open grading (✅ / ❌)
+  const handleTeacherGrade = (isCorrect) => {
     if (hasAnswered || isLocked) return;
 
     setHasAnswered(true);
@@ -69,21 +93,45 @@ export default function QuestionCard({
     }
   };
 
-  const isOralType = question.type?.startsWith('sentence_') || question.type === 'oral' || !question.options || question.options.length < 2;
+  const isConceptType = question.type === 'concept';
+  const isExampleType = question.type === 'example';
+  const hasOptions = Array.isArray(question.options) && question.options.length >= 2;
+  const isMultipleChoice = question.type === 'multiple_choice' || hasOptions;
+  const isOpenChallenge = isConceptType || isExampleType || !hasOptions;
+
   const isCorrectAnswer = selectedOption === question.correctAnswer || selectedOption === 'Correcto';
+
+  // Badge metadata
+  let badgeIcon = <Sparkles className="w-3.5 h-3.5 text-amber-400" />;
+  let badgeText = question.category || 'Reto de Inglés';
+  let badgeColor = 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+
+  if (isConceptType) {
+    badgeIcon = <BookOpen className="w-3.5 h-3.5 text-purple-400" />;
+    badgeText = '📖 Concepto (Pregunta Abierta)';
+    badgeColor = 'bg-purple-500/25 text-purple-300 border-purple-500/40';
+  } else if (isExampleType) {
+    badgeIcon = <Edit3 className="w-3.5 h-3.5 text-emerald-400" />;
+    badgeText = '✍️ Dar un Ejemplo';
+    badgeColor = 'bg-emerald-500/25 text-emerald-300 border-emerald-500/40';
+  } else if (isMultipleChoice) {
+    badgeIcon = <ListFilter className="w-3.5 h-3.5 text-amber-400" />;
+    badgeText = '📝 Opción Múltiple';
+    badgeColor = 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+  }
 
   return (
     <div className="bg-gradient-to-b from-gray-900 via-gray-900 to-black border-2 border-amber-500/50 rounded-3xl p-5 md:p-6 cabinet-3d-shadow relative overflow-hidden backdrop-blur-md animate-fadeIn">
-      {/* Golden Vegas Glow */}
+      {/* Vegas Ambient Glow */}
       <div className="absolute -top-12 -right-12 w-40 h-40 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-12 -left-12 w-40 h-40 bg-red-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-12 -left-12 w-40 h-40 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
 
       {/* Header Info */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4 border-b border-gray-800 pb-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase tracking-wider flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-amber-400" />
-            {question.category || 'Reto de Inglés'}
+          <span className={`px-2.5 py-1 rounded-full text-xs font-bold border uppercase tracking-wider flex items-center gap-1.5 ${badgeColor}`}>
+            {badgeIcon}
+            {badgeText}
           </span>
           {questionNumber && (
             <span className="text-xs text-gray-400 font-medium">
@@ -136,19 +184,19 @@ export default function QuestionCard({
       {/* Prompt Instructions Banner */}
       {question.promptInstructions && (
         <div className="mb-3 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-200 text-xs font-medium flex items-center gap-2">
-          <span>{question.promptInstructions}</span>
+          <span>💡 {question.promptInstructions}</span>
         </div>
       )}
 
-      {/* Main Question / Sentence Challenge Text */}
+      {/* Main Challenge Text */}
       <div className="my-3">
-        <h3 className="text-lg md:text-xl font-bold text-white tracking-wide leading-relaxed bg-black/30 p-4 rounded-2xl border border-gray-800">
+        <h3 className="text-lg md:text-xl font-bold text-white tracking-wide leading-relaxed bg-black/40 p-4 rounded-2xl border border-gray-800">
           {question.question}
         </h3>
       </div>
 
-      {/* Options Grid (If multiple choice options exist) */}
-      {question.options && question.options.length >= 2 && (
+      {/* TYPE 1: Multiple Choice Grid (4 options A, B, C, D) */}
+      {hasOptions && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
           {question.options.map((opt, idx) => {
             let btnStyle = 'bg-gray-800/80 hover:bg-gray-750 text-gray-200 border-gray-700 hover:border-amber-500/50 shadow-[0_4px_0_#1e293b] hover:shadow-[0_6px_0_#1e293b] active:translate-y-1 active:shadow-none';
@@ -156,10 +204,10 @@ export default function QuestionCard({
 
             if (hasAnswered) {
               if (opt === question.correctAnswer) {
-                btnStyle = 'bg-emerald-950/80 border-emerald-500 text-emerald-200 font-bold shadow-[0_4px_0_#065f46] scale-[1.01]';
+                btnStyle = 'bg-emerald-950/90 border-emerald-500 text-emerald-200 font-bold shadow-[0_4px_0_#065f46] scale-[1.01]';
                 icon = <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />;
               } else if (opt === selectedOption) {
-                btnStyle = 'bg-red-950/80 border-red-500 text-red-200 font-semibold shadow-[0_4px_0_#991b1b]';
+                btnStyle = 'bg-red-950/90 border-red-500 text-red-200 font-semibold shadow-[0_4px_0_#991b1b]';
                 icon = <XCircle className="w-5 h-5 text-red-400 shrink-0" />;
               } else {
                 btnStyle = 'bg-gray-900/40 text-gray-500 border-gray-800 opacity-60';
@@ -200,8 +248,38 @@ export default function QuestionCard({
         </div>
       )}
 
-      {/* Classroom Teacher Oral Grading Bar */}
-      {(!hasAnswered || isOralType) && (
+      {/* TYPE 2 & 3: Open Concept / Example Drafting Area (Optional Student Input) */}
+      {isOpenChallenge && !hasAnswered && (
+        <div className="mt-3 p-3.5 bg-black/50 border border-gray-800 rounded-2xl space-y-2">
+          <label className="block text-xs font-semibold text-gray-300">
+            {isExampleType 
+              ? '✍️ Escribe tu oración de ejemplo (o explícala en voz alta al docente):' 
+              : '📖 Espacio para redactar tu explicación o notas (opcional):'}
+          </label>
+          <div className="flex gap-2">
+            <textarea
+              rows={2}
+              value={studentDraft}
+              onChange={(e) => setStudentDraft(e.target.value)}
+              placeholder={isExampleType ? "ej. If I won the lottery, I would buy a house..." : "Explica aquí tu respuesta..."}
+              className="w-full bg-gray-900 border border-gray-700 focus:border-amber-400 rounded-xl p-2.5 text-xs text-white focus:outline-none resize-none"
+            />
+            {studentDraft.trim() && (
+              <button
+                type="button"
+                onClick={() => handleSpeak(studentDraft)}
+                className="px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-xl border border-amber-500/30 text-xs font-bold self-end transition cursor-pointer"
+                title="Pronunciar mi texto"
+              >
+                <Volume2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Teacher Evaluation & Model Answer Bar (For Open questions & Oral grading) */}
+      {(!hasAnswered || isOpenChallenge) && (
         <div className="mt-5 p-4 rounded-2xl bg-black/40 border border-gray-800 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
@@ -216,7 +294,7 @@ export default function QuestionCard({
                 className="px-3 py-1 rounded-xl bg-gray-800 hover:bg-gray-700 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition border border-gray-700 cursor-pointer"
               >
                 {showModelAnswer ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                {showModelAnswer ? 'Ocultar Respuesta Modelo' : '👁️ Ver Solución Modelo'}
+                {showModelAnswer ? 'Ocultar Solución Modelo' : '👁️ Ver Solución / Ejemplo Modelo'}
               </button>
             )}
           </div>
@@ -225,7 +303,9 @@ export default function QuestionCard({
           {showModelAnswer && (
             <div className="p-3 bg-amber-950/30 border border-amber-500/40 rounded-xl flex items-center justify-between gap-3 animate-fadeIn">
               <div>
-                <p className="text-[10px] uppercase font-bold text-amber-400">Respuesta / Frase Esperada:</p>
+                <p className="text-[10px] uppercase font-bold text-amber-400">
+                  {isExampleType ? 'Oración / Ejemplo Esperado:' : 'Explicación / Respuesta Modelo:'}
+                </p>
                 <p className="text-sm font-semibold text-white mt-0.5">
                   "{question.modelAnswer || question.correctAnswer}"
                 </p>
@@ -241,22 +321,22 @@ export default function QuestionCard({
             </div>
           )}
 
-          {/* Quick Oral Grading Buttons */}
+          {/* Teacher Grade Buttons */}
           {!hasAnswered && (
             <div className="grid grid-cols-2 gap-3 pt-1">
               <button
                 type="button"
-                onClick={() => handleOralGrade(true)}
+                onClick={() => handleTeacherGrade(true)}
                 disabled={isLocked}
                 className="py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/50 transition transform hover:scale-[1.02] active:scale-95 cursor-pointer"
               >
                 <ThumbsUp className="w-4 h-4" />
-                <span>✅ Correcto (+{question.points || 200})</span>
+                <span>✅ Correcto / Válido (+{question.points || 200})</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => handleOralGrade(false)}
+                onClick={() => handleTeacherGrade(false)}
                 disabled={isLocked}
                 className="py-3 px-4 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-red-950/50 transition transform hover:scale-[1.02] active:scale-95 cursor-pointer"
               >
@@ -268,7 +348,7 @@ export default function QuestionCard({
         </div>
       )}
 
-      {/* Explanation Box */}
+      {/* Explanation Box (Visible after answering, remains stable) */}
       {hasAnswered && question.explanation && (
         <div className={`mt-4 p-4 rounded-xl border animate-fadeIn text-sm ${
           isCorrectAnswer 

@@ -14,11 +14,13 @@ export const GROQ_MODELS = [
 ];
 
 export const CHALLENGE_TYPES = [
-  { id: 'random', name: '🎲 Aleatorio / Mixto (Recomendado)', description: 'Combina completar, opción múltiple y creación de oraciones' },
-  { id: 'multiple_choice', name: '📝 Selección Múltiple', description: 'Preguntas con 4 opciones A, B, C, D' },
+  { id: 'random', name: '🎲 Aleatorio / Mixto (Recomendado)', description: 'Alterna entre Concepto, Opción Múltiple y Dar un Ejemplo' },
+  { id: 'multiple_choice', name: '📝 Respuesta Única (Opción Múltiple)', description: 'Preguntas con 4 opciones A, B, C, D y una única respuesta correcta' },
+  { id: 'concept', name: '📖 Concepto (Pregunta Abierta)', description: 'El estudiante explica la regla o significado conceptual al docente' },
+  { id: 'example', name: '✍️ Dar un Ejemplo', description: 'El estudiante formula una oración de ejemplo aplicando la estructura' },
   { id: 'fill_blank', name: '✏️ Completar Espacios (Fill in the blanks)', description: 'Oraciones con espacios faltantes para completar' },
-  { id: 'sentence_affirmative', name: '➕ Crear Frases en Afirmativo', description: 'El alumno crea una oración afirmativa según el tema/claves' },
-  { id: 'sentence_negative', name: '➖ Crear Frases en Negativo', description: 'El alumno crea una oración negativa según el tema/claves' },
+  { id: 'sentence_affirmative', name: '➕ Crear Frases en Afirmativo', description: 'El alumno crea una oración afirmativa según claves' },
+  { id: 'sentence_negative', name: '➖ Crear Frases en Negativo', description: 'El alumno crea una oración negativa según claves' },
   { id: 'sentence_question', name: '❓ Formular Preguntas (Interrogativo)', description: 'El alumno formula una pregunta correcta en inglés' }
 ];
 
@@ -114,31 +116,40 @@ export async function generateEnglishQuiz({
     'qwen/qwen3.8-27b'
   ].filter((v, i, a) => v && a.indexOf(v) === i);
 
+  let normalizedTopic = topic;
+  if (Array.isArray(topic)) {
+    normalizedTopic = topic.filter(Boolean).join(', ');
+  }
+
   let typeGuidance = '';
   switch (challengeType) {
     case 'multiple_choice':
-      typeGuidance = `All questions MUST be multiple choice format ("type": "multiple_choice") with 4 clear options. One correct answer and three plausible distractors.`;
+      typeGuidance = `All questions MUST be multiple choice format ("type": "multiple_choice") with 4 distinct options ("options": ["A", "B", "C", "D"]) and 1 exact correctAnswer. Only one option can be correct.`;
+      break;
+    case 'concept':
+      typeGuidance = `All questions MUST be concept / open explanation format ("type": "concept"). Ask the student to explain a grammar rule, distinction, or language concept. Leave "options": []. Provide "modelAnswer" and "promptInstructions": "Explica la regla o concepto en voz alta al docente."`;
+      break;
+    case 'example':
+      typeGuidance = `All questions MUST be example production format ("type": "example"). Ask the student to provide/produce a complete example sentence applying the target grammar rule. Leave "options": []. Provide "modelAnswer" with a clear example and "promptInstructions": "Di o escribe una oración de ejemplo aplicando la estructura."`;
       break;
     case 'fill_blank':
-      typeGuidance = `All questions MUST be fill-in-the-blank format ("type": "fill_blank"). The sentence must contain a blank represented by "____" (e.g. "She ____ (study) English right now."). Options can provide 4 candidate words, or leave options empty if oral. Provide the exact correctAnswer.`;
+      typeGuidance = `All questions MUST be fill-in-the-blank format ("type": "fill_blank"). The sentence must contain a blank represented by "____". Provide 4 candidate options and the exact correctAnswer.`;
       break;
     case 'sentence_affirmative':
-      typeGuidance = `All questions MUST require creating an affirmative sentence ("type": "sentence_affirmative"). Give prompt keywords in English (e.g. "Create an affirmative sentence in Simple Past with: [they / travel / to London]"). Leave options empty or provide 4 sentence choices. Provide a modelAnswer and promptInstructions.`;
+      typeGuidance = `All questions MUST require creating an affirmative sentence ("type": "sentence_affirmative"). Give prompt keywords. Leave options empty or provide choices. Provide a modelAnswer.`;
       break;
     case 'sentence_negative':
-      typeGuidance = `All questions MUST require creating a negative sentence ("type": "sentence_negative"). Give prompt cues in English (e.g. "Create a negative sentence in Present Continuous with: [he / watch / TV]"). Leave options empty or provide 4 choices. Provide a modelAnswer and promptInstructions.`;
+      typeGuidance = `All questions MUST require creating a negative sentence ("type": "sentence_negative"). Give prompt cues. Provide a modelAnswer.`;
       break;
     case 'sentence_question':
-      typeGuidance = `All questions MUST require creating an interrogative question ("type": "sentence_question"). Give prompt cues in English (e.g. "Ask a question in Past Simple with: [where / you / go / yesterday]"). Provide a modelAnswer and promptInstructions.`;
+      typeGuidance = `All questions MUST require creating an interrogative question ("type": "sentence_question"). Give prompt cues. Provide a modelAnswer.`;
       break;
     case 'random':
     default:
-      typeGuidance = `Include a diverse, entertaining mix of question types across the set:
-- Some "multiple_choice" (standard 4 options)
-- Some "fill_blank" (sentence with "____")
-- Some "sentence_affirmative" (oral sentence creation in affirmative)
-- Some "sentence_negative" (oral sentence creation in negative)
-- Some "sentence_question" (oral question formulation)
+      typeGuidance = `Include a balanced, diverse mix across the set representing the three main pedagogical pillars:
+- "multiple_choice" (4 options A, B, C, D with 1 single correct answer)
+- "concept" (open concept / rule explanation with modelAnswer and empty options)
+- "example" (sentence production prompt where the student creates an example with modelAnswer)
 Mark each item's "type" field accordingly.`;
       break;
   }
@@ -147,7 +158,7 @@ Mark each item's "type" field accordingly.`;
 Your task is to generate high-quality, engaging English learning challenges tailored for a Casino-themed classroom projection game where a student tests their luck and, if unlucky, answers a challenge or speaks aloud to the teacher.
 
 Target CEFR Level: ${level}
-Topic: ${topic}
+Topic(s): ${normalizedTopic}
 Number of Questions: ${questionCount}
 Target Machine: ${gameType}
 Challenge Format Requirement: ${typeGuidance}
@@ -325,15 +336,30 @@ export async function generateSingleTurnQuestion({
     'qwen/qwen3.8-27b'
   ].filter((v, i, a) => v && a.indexOf(v) === i);
 
+  // Pick an active topic if multiple topics were specified
+  let activeTopic = topic;
+  if (Array.isArray(topic) && topic.length > 0) {
+    activeTopic = topic[Math.floor(Math.random() * topic.length)];
+  } else if (typeof topic === 'string' && topic.includes(',')) {
+    const list = topic.split(',').map(t => t.trim()).filter(Boolean);
+    if (list.length > 0) {
+      activeTopic = list[Math.floor(Math.random() * list.length)];
+    }
+  }
+
   let chosenType = challengeType;
   if (challengeType === 'random') {
-    const types = ['multiple_choice', 'fill_blank', 'sentence_affirmative', 'sentence_negative', 'sentence_question'];
+    const types = ['concept', 'multiple_choice', 'example'];
     chosenType = types[Math.floor(Math.random() * types.length)];
   }
 
   let formatInstruction = '';
   if (chosenType === 'multiple_choice') {
-    formatInstruction = 'Format: Multiple choice with 4 distinct options ("options": ["A", "B", "C", "D"]) and 1 exact correctAnswer.';
+    formatInstruction = 'Format: Multiple choice with 4 distinct options ("options": ["Option A", "Option B", "Option C", "Option D"]) and 1 exact correctAnswer. Only ONE option is correct. "category": "Opción Múltiple".';
+  } else if (chosenType === 'concept') {
+    formatInstruction = 'Format: Concept / Open question (Pregunta abierta). Ask the student to explain a grammar rule, distinction, or language concept. "options": []. Provide "modelAnswer" with the expected explanation for teacher oral verification, and "promptInstructions": "Explica la regla o concepto en voz alta al docente." "category": "Concepto (Abierta)".';
+  } else if (chosenType === 'example') {
+    formatInstruction = 'Format: Example production (Dar un ejemplo). Ask the student to produce a complete example sentence applying the rule. "options": []. Provide "modelAnswer" with a clear model sentence, and "promptInstructions": "Di o escribe una oración de ejemplo aplicando la estructura." "category": "Dar un Ejemplo".';
   } else if (chosenType === 'fill_blank') {
     formatInstruction = 'Format: Sentence with a blank "____" to complete. Provide 4 options or leave options empty if oral. Provide correctAnswer.';
   } else if (chosenType === 'sentence_affirmative') {
@@ -345,7 +371,7 @@ export async function generateSingleTurnQuestion({
   }
 
   const prompt = `Generate ONE engaging, unique English educational challenge for student "${studentName}" playing a Las Vegas casino classroom game.
-Topic: "${topic}"
+Topic: "${activeTopic}"
 Target Level: ${level}
 Challenge Type: ${chosenType}
 ${formatInstruction}

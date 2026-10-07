@@ -307,7 +307,7 @@ export default function BlackjackGame({
     sceneRef.current = scene;
     scene.background = new THREE.Color(0x070b14);
 
-    const camera = new THREE.PerspectiveCamera(48, width / height, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(48, width / height, 0.5, 100);
     camera.position.set(0, 11, 11.5);
     camera.lookAt(0, 0, 0.2);
     cameraRef.current = camera;
@@ -331,7 +331,7 @@ export default function BlackjackGame({
     const ambientLight = new THREE.AmbientLight(0x94a3b8, 0.7);
     scene.add(ambientLight);
 
-    // Main casino table spotlight
+    // Main casino table spotlight (with positive bias to prevent shadow acne)
     const tableSpot = new THREE.SpotLight(0xfffbeb, 4.0);
     tableSpot.position.set(0, 16, 2);
     tableSpot.target.position.set(0, 0, 0.5);
@@ -340,7 +340,8 @@ export default function BlackjackGame({
     tableSpot.castShadow = true;
     tableSpot.shadow.mapSize.width = 2048;
     tableSpot.shadow.mapSize.height = 2048;
-    tableSpot.shadow.bias = -0.0001;
+    tableSpot.shadow.bias = 0.00005;
+    tableSpot.shadow.normalBias = 0.02;
     scene.add(tableSpot);
     scene.add(tableSpot.target);
 
@@ -349,16 +350,25 @@ export default function BlackjackGame({
     warmRim.position.set(-8, 12, 10);
     scene.add(warmRim);
 
-    const coolRim = new THREE.DirectionalLight(0x38bdf8, 0.8);
-    coolRim.position.set(8, 10, -8);
+    // Softened cool rim light to eliminate grazing edge glare
+    const coolRim = new THREE.DirectionalLight(0x38bdf8, 0.35);
+    coolRim.position.set(6, 8, -6);
     scene.add(coolRim);
 
     // 4. Casino Table (Felt & Wood Rim)
     const tableGroup = new THREE.Group();
     scene.add(tableGroup);
 
-    // Mahogany outer table rim
-    const tableRimGeom = new THREE.CylinderGeometry(14, 14.2, 0.8, 64, 1, false, 0, Math.PI);
+    // Base mesh under felt to eliminate light bleed
+    const underFeltGeom = new THREE.PlaneGeometry(16, 12);
+    const underFeltMat = new THREE.MeshBasicMaterial({ color: 0x050811 });
+    const underFeltMesh = new THREE.Mesh(underFeltGeom, underFeltMat);
+    underFeltMesh.rotation.x = -Math.PI / 2;
+    underFeltMesh.position.set(0, -0.01, 0);
+    tableGroup.add(underFeltMesh);
+
+    // Mahogany outer table rim (openEnded: true to eliminate co-planar top cap Z-fighting)
+    const tableRimGeom = new THREE.CylinderGeometry(14, 14.2, 0.8, 64, 1, true, 0, Math.PI);
     const tableRimMat = new THREE.MeshStandardMaterial({
       color: 0x1f0f08,
       roughness: 0.28,
@@ -366,11 +376,11 @@ export default function BlackjackGame({
     });
     const tableRim = new THREE.Mesh(tableRimGeom, tableRimMat);
     tableRim.rotation.y = -Math.PI / 2;
-    tableRim.position.set(0, -0.4, 0);
+    tableRim.position.set(0, -0.45, 0);
     tableRim.receiveShadow = true;
     tableGroup.add(tableRim);
 
-    // Green felt surface
+    // Green felt surface (elevated at y: 0.02 to ensure zero overlap with rim)
     const feltTexture = createTableFeltTexture();
     const feltGeom = new THREE.PlaneGeometry(16, 12);
     const feltMat = new THREE.MeshStandardMaterial({
@@ -380,7 +390,7 @@ export default function BlackjackGame({
     });
     const feltMesh = new THREE.Mesh(feltGeom, feltMat);
     feltMesh.rotation.x = -Math.PI / 2;
-    feltMesh.position.set(0, 0, 0);
+    feltMesh.position.set(0, 0.02, 0);
     feltMesh.receiveShadow = true;
     tableGroup.add(feltMesh);
 
@@ -436,12 +446,14 @@ export default function BlackjackGame({
     scene.add(chipGroup);
     chipStackGroupRef.current = chipGroup;
 
-    // 7. Parallax mouse tracking
+    // 7. Parallax mouse tracking with smooth clamping
     let mouseX = 0;
     let mouseY = 0;
     const handleMouseMove = (e) => {
-      mouseX = (e.clientX / window.innerWidth - 0.5) * 0.8;
-      mouseY = (e.clientY / window.innerHeight - 0.5) * 0.5;
+      const normX = (e.clientX / window.innerWidth - 0.5) * 0.6;
+      const normY = (e.clientY / window.innerHeight - 0.5) * 0.4;
+      mouseX = Math.max(-0.5, Math.min(0.5, normX));
+      mouseY = Math.max(-0.35, Math.min(0.35, normY));
     };
     window.addEventListener('mousemove', handleMouseMove, { passive: true });
 
@@ -755,9 +767,7 @@ export default function BlackjackGame({
 
     if (pScore > 21) {
       // Bust -> Unlucky!
-      setRoundOutcome('unlucky_challenge');
-      sounds.playWrong();
-      setResultMessage(`💥 ¡Te pasaste de 21 (${pScore} pts)! La casa gana la mano. ¡Supera el reto de inglés para defender tu turno!`);
+      triggerUnluckyLoss(`💥 ¡Te pasaste de 21 (${pScore} pts)! La casa gana la mano. ¡Supera el reto de inglés para defender tu turno!`);
     } else if (isNaturalBlackjack) {
       // Natural 21 -> Lucky exonerated with 3:2 payout
       const winPayout = Math.round(bet * 2.5);
@@ -798,9 +808,26 @@ export default function BlackjackGame({
       setResultMessage(`🤝 ¡Empate (${pScore} a ${dScore})! La casa devuelve las ${bet} fichas.`);
     } else {
       // Dealer wins -> Unlucky!
-      setRoundOutcome('unlucky_challenge');
-      sounds.playWrong();
-      setResultMessage(`⚠️ El Crupier ganó (${dScore} vs tus ${pScore}). ¡Debes responder el reto de inglés para salvar tu turno!`);
+      triggerUnluckyLoss(`⚠️ El Crupier ganó (${dScore} vs tus ${pScore}). ¡Debes responder el reto de inglés para salvar tu turno!`);
+    }
+  };
+
+  const triggerUnluckyLoss = async (msg) => {
+    setRoundOutcome('unlucky_challenge');
+    sounds.playWrong();
+    setResultMessage(msg);
+    if (onGenerateTurnQuestion) {
+      setIsGeneratingIA(true);
+      try {
+        const liveQ = await onGenerateTurnQuestion(activeStudent);
+        if (liveQ) {
+          setTurnQuestionOverride(liveQ);
+        }
+      } catch (err) {
+        console.warn('Fallback to standard question list on loss:', err);
+      } finally {
+        setIsGeneratingIA(false);
+      }
     }
   };
 
@@ -832,7 +859,7 @@ export default function BlackjackGame({
       setResultMessage('❌ Respuesta incorrecta. ¡Sigue practicando!');
     }
 
-    setCurrentQuestionIndex(prev => (prev + 1) % (questions.length || 1));
+    // Do NOT increment question index here so the answered card remains stable on screen!
   };
 
   const handleRegenerateTurnQuestion = async () => {
@@ -860,6 +887,8 @@ export default function BlackjackGame({
     setDealerHand([]);
     setTurnQuestionOverride(null);
     clear3DCards();
+    // Advance to next question only when advancing turn
+    setCurrentQuestionIndex(prev => (prev + 1) % (questions.length || 1));
     if (onAdvanceStudentTurn) {
       onAdvanceStudentTurn();
     }
@@ -975,7 +1004,7 @@ export default function BlackjackGame({
           )}
 
           {/* Unlucky English Challenge */}
-          {roundOutcome === 'unlucky_challenge' && currentQuestion && (
+          {roundOutcome === 'unlucky_challenge' && (
             <div className="pointer-events-auto w-full bg-gray-950/95 border-2 border-red-500/70 rounded-3xl p-4 shadow-2xl backdrop-blur-md animate-fadeIn space-y-3">
               <div className="flex items-center justify-between border-b border-gray-800 pb-2">
                 <div className="flex items-center gap-2 text-xs font-bold text-red-200">
@@ -997,11 +1026,22 @@ export default function BlackjackGame({
                 )}
               </div>
 
-              <QuestionCard
-                question={currentQuestion}
-                onAnswer={handleQuestionAnswer}
-                activeStudent={activeStudent}
-              />
+              {isGeneratingIA ? (
+                <div className="p-8 text-center bg-black/60 rounded-2xl border border-purple-500/40 space-y-3">
+                  <Sparkles className="w-8 h-8 text-yellow-300 animate-spin mx-auto" />
+                  <p className="text-sm font-bold text-purple-200">
+                    ⚡ Generando reto de inglés con IA para {activeStudent?.name || 'el estudiante'}...
+                  </p>
+                  <p className="text-xs text-gray-400">Consultando los temas activos de la sesión</p>
+                </div>
+              ) : currentQuestion ? (
+                <QuestionCard
+                  key={currentQuestion.id || currentQuestionIndex}
+                  question={currentQuestion}
+                  onAnswer={handleQuestionAnswer}
+                  activeStudent={activeStudent}
+                />
+              ) : null}
 
               <div className="flex justify-end pt-1">
                 <button

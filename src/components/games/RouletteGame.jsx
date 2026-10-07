@@ -407,6 +407,17 @@ export default function RouletteGame({
       setWinMessage(
         `⚠️ ¡Mala suerte! Cayó el número ${num}. Solo acertaste ${matchedCount} de 3 criterios (necesitabas 2 o más). ¡Debes responder el reto de inglés!`
       );
+
+      // Auto-generate pedagogical turn question on loss based on active session topics
+      if (onGenerateTurnQuestion) {
+        setIsGeneratingIA(true);
+        onGenerateTurnQuestion(activeStudent)
+          .then(newQ => {
+            if (newQ) setTurnQuestionOverride(newQ);
+          })
+          .catch(err => console.error('Error auto-generating loss question in Roulette:', err))
+          .finally(() => setIsGeneratingIA(false));
+      }
     }
   };
 
@@ -437,8 +448,6 @@ export default function RouletteGame({
       }
       setWinMessage('❌ Respuesta incorrecta. ¡La casa se queda con las fichas este giro!');
     }
-
-    setCurrentQuestionIndex(prev => (prev + 1) % (questions.length || 1));
   };
 
   const handleGenerateLiveQuestion = async () => {
@@ -464,6 +473,7 @@ export default function RouletteGame({
     setWinningNumber(null);
     setCriteriaResults(null);
     setTurnQuestionOverride(null);
+    setCurrentQuestionIndex(prev => (prev + 1) % (questions.length || 1));
     if (onAdvanceStudentTurn) {
       onAdvanceStudentTurn();
     }
@@ -785,14 +795,21 @@ export default function RouletteGame({
                 disabled={isGeneratingIA}
                 className="px-3.5 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white font-bold text-xs rounded-xl shadow transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
               >
-                <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                <Sparkles className={`w-3.5 h-3.5 text-yellow-300 ${isGeneratingIA ? 'animate-spin' : ''}`} />
                 <span>{isGeneratingIA ? 'Generando con IA...' : 'Generar Otra Pregunta IA (Groq)'}</span>
               </button>
             )}
           </div>
 
-          {currentQuestion ? (
+          {isGeneratingIA && !turnQuestionOverride ? (
+            <div className="p-8 text-center bg-purple-950/30 border border-purple-500/30 rounded-2xl animate-pulse space-y-2">
+              <Sparkles className="w-8 h-8 text-yellow-400 mx-auto animate-spin" />
+              <p className="text-sm font-bold text-purple-200">Generando reto pedagógico para {activeStudent ? activeStudent.name : 'el estudiante'}...</p>
+              <p className="text-xs text-purple-400">Creando pregunta adaptada a los temas activos de la sesión</p>
+            </div>
+          ) : currentQuestion ? (
             <QuestionCard
+              key={currentQuestion.id || currentQuestionIndex}
               question={currentQuestion}
               onAnswer={handleQuestionAnswer}
               activeStudent={activeStudent}
