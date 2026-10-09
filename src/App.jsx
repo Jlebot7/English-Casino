@@ -225,7 +225,15 @@ export default function App() {
   // Turn Navigation
   const handleNextStudent = () => {
     if (students.length === 0) return;
-    setActiveStudentIndex(prev => (prev + 1) % students.length);
+    const completedIds = activeSession?.completedStudentIds || [];
+    const pendingStudents = students.filter(s => !completedIds.includes(s.id));
+    if (pendingStudents.length > 0) {
+      const nextPending = pendingStudents[0];
+      const nextIdx = students.findIndex(s => s.id === nextPending.id);
+      setActiveStudentIndex(nextIdx !== -1 ? nextIdx : 0);
+    } else {
+      setActiveStudentIndex(prev => (prev + 1) % students.length);
+    }
   };
 
   const handleRandomStudent = () => {
@@ -481,18 +489,21 @@ export default function App() {
 
   // When a student is chosen by the roulette spinner
   const handleStudentSelectedFromSpinner = (chosenStudent) => {
-    const idx = students.findIndex(s => s.id === chosenStudent.id);
+    if (!chosenStudent) return;
+    const studentId = chosenStudent.id;
+    const idx = students.findIndex(s => s.id === studentId || s.name === chosenStudent.name);
     if (idx !== -1) {
       setActiveStudentIndex(idx);
     }
     setHasChosenTurnStudent(true);
-    // Mark as participated in today's session
+    // Mark as participated in today's session immediately
     setActiveSession(prev => {
       const existing = prev?.completedStudentIds || [];
-      if (existing.includes(chosenStudent.id)) return prev;
+      const idToStore = studentId || (students[idx] ? students[idx].id : null);
+      if (!idToStore || existing.includes(idToStore)) return prev;
       return {
         ...prev,
-        completedStudentIds: [...existing, chosenStudent.id]
+        completedStudentIds: [...existing, idToStore]
       };
     });
   };
