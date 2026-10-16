@@ -768,9 +768,9 @@ export default function BlackjackGame({
     if (pScore > 21) {
       // Bust -> Unlucky!
       triggerUnluckyLoss(`💥 ¡Te pasaste de 21 (${pScore} pts)! La casa gana la mano. ¡Supera el reto de inglés para defender tu turno!`);
-    } else if (isNaturalBlackjack) {
-      // Natural 21 -> Lucky exonerated with 3:2 payout
-      const winPayout = Math.round(bet * 2.5);
+    } else if (isNaturalBlackjack || (pScore === 21 && (dScore > 21 || pScore > dScore))) {
+      // Natural 21 or 21 Points Win -> Lucky exonerated with high payout
+      const winPayout = isNaturalBlackjack ? Math.round(bet * 2.5) : Math.round(bet * 2);
       onUpdateChips(winPayout);
       if (onRecordStudentScore && activeStudent) {
         onRecordStudentScore(activeStudent.id, winPayout, true, false, {
@@ -783,9 +783,9 @@ export default function BlackjackGame({
       setRoundOutcome('lucky_exonerated');
       sounds.playJackpot();
       confetti({ particleCount: 140, spread: 85, origin: { y: 0.6 } });
-      setResultMessage(`🔥 ¡BLACKJACK NATURAL (21)! ${activeStudent ? activeStudent.name : 'El estudiante'} derrota a la casa, queda exonerado y cobra +${winPayout} fichas.`);
-    } else if (dScore > 21 || pScore > dScore) {
-      // Player wins -> Lucky exonerated!
+      setResultMessage(`🔥 ¡${isNaturalBlackjack ? 'BLACKJACK NATURAL (21)' : 'VICTORIA PERFECTA CON 21'}! ${activeStudent ? activeStudent.name : 'El estudiante'} derrota a la casa, queda exonerado y cobra +${winPayout} fichas.`);
+    } else if (pScore === 20 && (dScore > 21 || pScore > dScore)) {
+      // Elite 20 Points Win -> Lucky exonerated!
       const winPayout = Math.round(bet * 2);
       onUpdateChips(winPayout);
       if (onRecordStudentScore && activeStudent) {
@@ -799,7 +799,13 @@ export default function BlackjackGame({
       setRoundOutcome('lucky_exonerated');
       sounds.playJackpot();
       confetti({ particleCount: 110, spread: 70, origin: { y: 0.6 } });
-      setResultMessage(`🎉 ¡VICTORIA EN EL 21! ${pScore} vs ${dScore > 21 ? 'Crupier se pasó' : `${dScore} del Crupier`}. ¡${activeStudent ? activeStudent.name : 'El estudiante'} queda exonerado y cobra +${winPayout} fichas!`);
+      setResultMessage(`🎉 ¡MANO DE ÉLITE (20 PTS)! ${pScore} vs ${dScore > 21 ? 'Crupier se pasó' : `${dScore} del Crupier`}. ¡${activeStudent ? activeStudent.name : 'El estudiante'} queda exonerado y cobra +${winPayout} fichas!`);
+    } else if (dScore > 21 || pScore > dScore) {
+      // Regular Win with <= 19 pts: Pays chips, but requires English challenge (exoneration requires 20-21 pts)
+      const winPayout = Math.round(bet * 2);
+      onUpdateChips(winPayout);
+      sounds.playChips();
+      triggerUnluckyLoss(`💵 ¡Ganaste la mano (${pScore} vs ${dScore > 21 ? 'Crupier se pasó' : `${dScore} del Crupier`})! Cobras +${winPayout} fichas. Para consolidar tu turno (la exoneración directa requiere 20 o 21 pts), ¡supera este reto de inglés!`);
     } else if (pScore === dScore) {
       // Push -> Bet returned
       onUpdateChips(bet);

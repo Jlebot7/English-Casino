@@ -87,25 +87,18 @@ export default function SlotsGame({
   const finalizeSpin = () => {
     setIsSpinning(false);
 
-    // Roll for luck: ~45% chance of matching symbols
-    const hasLuck = Math.random() < 0.45;
+    // Increased difficulty: Full exoneration requires 3 matching symbols (Jackpot, ~18% chance)
+    const roll = Math.random();
+    const isJackpot = roll < 0.18;
+    const isTwoMatch = !isJackpot && roll < 0.40;
     let finalSymbols;
     let wonChips = 0;
 
-    if (hasLuck) {
-      const isJackpot = Math.random() < 0.3;
-      if (isJackpot) {
-        // 3 matching symbols (Jackpot!)
-        const sym = getRandomSymbol();
-        finalSymbols = [sym.icon, sym.icon, sym.icon];
-        wonChips = Math.round(bet * sym.mult);
-      } else {
-        // 2 matching symbols
-        const sym = getRandomSymbol();
-        const other = SYMBOLS.find(s => s.icon !== sym.icon) || sym;
-        finalSymbols = [sym.icon, sym.icon, other.icon];
-        wonChips = Math.round(bet * 2);
-      }
+    if (isJackpot) {
+      // 3 matching symbols (Jackpot!) -> Fully Exonerated!
+      const sym = getRandomSymbol();
+      finalSymbols = [sym.icon, sym.icon, sym.icon];
+      wonChips = Math.round(bet * sym.mult);
 
       setReels(finalSymbols);
       onUpdateChips(wonChips);
@@ -128,8 +121,33 @@ export default function SlotsGame({
       });
 
       setWinMessage(
-        `🎰 ¡EXONERADO POR SUERTE! Los rodillos coincidieron (${finalSymbols.join(' ')}). ¡${activeStudent ? activeStudent.name : 'El estudiante'} se salva del reto y cobra +${wonChips} fichas!`
+        `🎰 ¡JACKPOT Y EXONERACIÓN TOTAL! Los 3 rodillos coincidieron (${finalSymbols.join(' ')}). ¡${activeStudent ? activeStudent.name : 'El estudiante'} se salva del reto y cobra +${wonChips} fichas!`
       );
+    } else if (isTwoMatch) {
+      // 2 matching symbols -> Consolation payout, but must answer English challenge
+      const sym = getRandomSymbol();
+      const other = SYMBOLS.find(s => s.icon !== sym.icon) || sym;
+      finalSymbols = [sym.icon, sym.icon, other.icon];
+      wonChips = Math.round(bet * 1.5);
+
+      setReels(finalSymbols);
+      onUpdateChips(wonChips);
+
+      setRoundOutcome('unlucky_challenge');
+      sounds.playWrong();
+      setWinMessage(
+        `🍒 ¡Buen intento! Obtuviste 2 símbolos iguales (${sym.icon} ${sym.icon}). Cobras +${wonChips} fichas, pero necesitas los 3 para exonerarte directo. ¡Responde el reto pedagógico!`
+      );
+
+      if (onGenerateTurnQuestion) {
+        setIsGeneratingIA(true);
+        onGenerateTurnQuestion(activeStudent)
+          .then(newQ => {
+            if (newQ) setTurnQuestionOverride(newQ);
+          })
+          .catch(() => {})
+          .finally(() => setIsGeneratingIA(false));
+      }
     } else {
       // Unlucky: 3 distinct symbols
       const s1 = SYMBOLS[0];

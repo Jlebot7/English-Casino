@@ -349,7 +349,7 @@ export default function RouletteGame({
     requestAnimationFrame(animate);
   };
 
-  // Evaluate the 2 of 3 criteria rule for exoneration
+  // Evaluate criteria rule for exoneration: 3 of 3 required for full exoneration!
   const evaluateLuck = (num, pocketIdx) => {
     const cat = getNumberCategory(num);
 
@@ -364,7 +364,8 @@ export default function RouletteGame({
     }
 
     const matchedCount = (matchParity ? 1 : 0) + (matchColor ? 1 : 0) + (matchHalf ? 1 : 0);
-    const isExonerated = matchedCount >= 2;
+    // Increased difficulty: Full exoneration requires matching ALL 3 criteria (3 of 3)
+    const isExonerated = matchedCount === 3;
 
     const breakdown = {
       number: num,
@@ -380,8 +381,8 @@ export default function RouletteGame({
     setCriteriaResults(breakdown);
 
     if (isExonerated) {
-      // Exonerated! Payout: 2x for 2 hits, 3.5x for all 3 hits!
-      const multiplier = matchedCount === 3 ? 3.5 : 2.0;
+      // Perfect Triple Hit! Exonerated with 3.5x payout!
+      const multiplier = 3.5;
       const payout = Math.round(bet * multiplier);
       onUpdateChips(payout);
 
@@ -398,15 +399,25 @@ export default function RouletteGame({
       sounds.playJackpot();
       confetti({ particleCount: 140, spread: 85, origin: { y: 0.6 } });
       setWinMessage(
-        `🎉 ¡EXONERADO POR SUERTE! Cayó el número ${num} (${cat.color === 'red' ? 'ROJO' : cat.color === 'black' ? 'NEGRO' : 'VERDE'}) y acertaste ${matchedCount} de 3 criterios. ¡${activeStudent ? activeStudent.name : 'El estudiante'} se salva de responder y cobra +${payout} fichas!`
+        `🎉 ¡EXONERADO POR SUERTE MÁXIMA! Cayó el número ${num} (${cat.color === 'red' ? 'ROJO' : cat.color === 'black' ? 'NEGRO' : 'VERDE'}) y acertaste los 3 de 3 criterios. ¡${activeStudent ? activeStudent.name : 'El estudiante'} se salva de responder y cobra +${payout} fichas!`
       );
     } else {
-      // Unlucky! Must answer challenge
+      // Unlucky or partial match: Must answer challenge!
       setRoundOutcome('unlucky_challenge');
       sounds.playWrong();
-      setWinMessage(
-        `⚠️ ¡Mala suerte! Cayó el número ${num}. Solo acertaste ${matchedCount} de 3 criterios (necesitabas 2 o más). ¡Debes responder el reto de inglés!`
-      );
+
+      if (matchedCount === 2) {
+        // Consolation chips for 2 hits (1.5x), but still requires answering the challenge
+        const consolationPayout = Math.round(bet * 1.5);
+        onUpdateChips(consolationPayout);
+        setWinMessage(
+          `⚡ ¡Buen intento! Cayó el número ${num} y acertaste 2 de 3 criterios. Cobras +${consolationPayout} fichas de premio parcial, ¡pero necesitas 3 de 3 para exonerarte! Supera el reto de inglés para defender tu turno.`
+        );
+      } else {
+        setWinMessage(
+          `⚠️ ¡Mala suerte! Cayó el número ${num}. Solo acertaste ${matchedCount} de 3 criterios (necesitabas los 3 para exonerarte). ¡Debes responder el reto de inglés!`
+        );
+      }
 
       // Auto-generate pedagogical turn question on loss based on active session topics
       if (onGenerateTurnQuestion) {
@@ -544,18 +555,18 @@ export default function RouletteGame({
           </p>
         </div>
 
-        {/* Right Column: 2 of 3 Criteria Betting Board & Controls */}
+        {/* Right Column: 3 Criteria Betting Board & Controls */}
         <div className="lg:col-span-6 bg-gradient-to-b from-gray-900 via-gray-950 to-black border-2 border-blue-500/40 rounded-3xl p-6 shadow-2xl space-y-5 cabinet-3d-shadow">
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-bold uppercase tracking-wider mb-2">
               <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
-              Regla de Exoneración
+              Regla de Exoneración Máxima
             </div>
             <h3 className="text-xl font-black text-white">
-              🎯 Acierta 2 de las 3 Opciones
+              🎯 Acierta los 3 Criterios (Pleno)
             </h3>
             <p className="text-xs text-gray-300 mt-1">
-              Selecciona tus pronósticos en los 3 criterios clásicos. <strong>¡Si aciertas al menos 2 de los 3 (2/3 o 3/3), quedas totalmente EXONERADO!</strong>
+              Pronostica los 3 criterios clásicos. <strong>¡Acertar los 3 de 3 (3/3) otorga la EXONERACIÓN TOTAL! Acertar 2 de 3 te premia con fichas (1.5x), pero requiere responder la pregunta pedagógica.</strong>
             </p>
           </div>
 

@@ -95,9 +95,10 @@ export default function QuestionCard({
 
   const isConceptType = question.type === 'concept';
   const isExampleType = question.type === 'example';
-  const hasOptions = Array.isArray(question.options) && question.options.length >= 2;
-  const isMultipleChoice = question.type === 'multiple_choice' || hasOptions;
-  const isOpenChallenge = isConceptType || isExampleType || !hasOptions;
+  const hasValidOptions = Array.isArray(question.options) && question.options.length >= 2;
+  // If explicitly concept or example, it MUST NOT render as multiple choice even if options array is present!
+  const isMultipleChoice = !isConceptType && !isExampleType && (question.type === 'multiple_choice' || hasValidOptions);
+  const isOpenChallenge = isConceptType || isExampleType || !isMultipleChoice;
 
   const isCorrectAnswer = selectedOption === question.correctAnswer || selectedOption === 'Correcto';
 
@@ -196,7 +197,7 @@ export default function QuestionCard({
       </div>
 
       {/* TYPE 1: Multiple Choice Grid (4 options A, B, C, D) */}
-      {hasOptions && (
+      {isMultipleChoice && hasValidOptions && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
           {question.options.map((opt, idx) => {
             let btnStyle = 'bg-gray-800/80 hover:bg-gray-750 text-gray-200 border-gray-700 hover:border-amber-500/50 shadow-[0_4px_0_#1e293b] hover:shadow-[0_6px_0_#1e293b] active:translate-y-1 active:shadow-none';

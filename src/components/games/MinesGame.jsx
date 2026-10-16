@@ -18,17 +18,17 @@ import { disposeThreeScene, toggleFullscreen } from '../../utils/threeUtils';
 import QuestionCard from '../QuestionCard';
 
 const GRID_SIZE = 25; // 5x5
-const MINES_COUNT = 3;
+const MINES_COUNT = 5; // Increased difficulty: 5 hidden mines in 25 tiles
 
 const MULTIPLIERS = [
   1.0,  // 0 gems
-  1.15, // 1 gem
-  1.42, // 2 gems (min to exonerate)
-  1.80, // 3 gems
-  2.35, // 4 gems
-  3.15, // 5 gems
-  4.30, // 6 gems
-  6.00  // 7+ gems
+  1.20, // 1 gem
+  1.55, // 2 gems
+  2.15, // 3 gems (min to exonerate)
+  3.10, // 4 gems
+  4.80, // 5 gems
+  7.50, // 6 gems
+  12.00 // 7+ gems
 ];
 
 /**
@@ -567,7 +567,7 @@ export default function MinesGame({
 
   // ─── Cash Out and Exonerate ───
   const handleCashOut = () => {
-    if (!isPlaying || gemsFound < 2) return;
+    if (!isPlaying || gemsFound < 3) return;
 
     setIsPlaying(false);
     const payout = Math.round(bet * currentMultiplier);
@@ -865,18 +865,18 @@ export default function MinesGame({
           {isPlaying && (
             <button
               onClick={handleCashOut}
-              disabled={gemsFound < 2}
+              disabled={gemsFound < 3}
               className={`w-full py-4 font-black text-sm sm:text-base rounded-2xl shadow-xl transition transform cursor-pointer flex items-center justify-center gap-2 border ${
-                gemsFound >= 2
+                gemsFound >= 3
                   ? 'bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-400 text-black border-emerald-300 animate-pulse hover:scale-[1.02]'
                   : 'bg-gray-850 border-gray-700 text-gray-400 opacity-60 cursor-not-allowed'
               }`}
             >
               <ShieldCheck className="w-5 h-5" />
               <span>
-                {gemsFound >= 2
+                {gemsFound >= 3
                   ? `PLANTARSE Y EXONERARSE (${Math.round(bet * currentMultiplier)} FICHAS)`
-                  : `ENCUENTRA ${2 - gemsFound} GEMA(S) MÁS PARA EXONERARTE`}
+                  : `ENCUENTRA ${3 - gemsFound} GEMA(S) MÁS PARA EXONERARTE`}
               </span>
             </button>
           )}

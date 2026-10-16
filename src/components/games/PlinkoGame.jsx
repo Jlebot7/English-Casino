@@ -7,11 +7,11 @@ import QuestionCard from '../QuestionCard';
 const BINS = [
   { label: '10x', mult: 10, color: '#dc2626', isExonerated: true },
   { label: '3x', mult: 3, color: '#ea580c', isExonerated: true },
-  { label: '1.5x', mult: 1.5, color: '#ca8a04', isExonerated: true },
+  { label: '1.5x', mult: 1.5, color: '#ca8a04', isExonerated: false },
   { label: '0.5x', mult: 0.5, color: '#475569', isExonerated: false },
   { label: '0.2x', mult: 0.2, color: '#334155', isExonerated: false },
   { label: '0.5x', mult: 0.5, color: '#475569', isExonerated: false },
-  { label: '1.5x', mult: 1.5, color: '#ca8a04', isExonerated: true },
+  { label: '1.5x', mult: 1.5, color: '#ca8a04', isExonerated: false },
   { label: '3x', mult: 3, color: '#ea580c', isExonerated: true },
   { label: '10x', mult: 10, color: '#dc2626', isExonerated: true }
 ];
@@ -313,7 +313,7 @@ export default function PlinkoGame({
 
   const evaluateDrop = (bin) => {
     if (bin.isExonerated) {
-      // Exonerated!
+      // Exonerated! (3x or 10x jackpot bins)
       const payout = Math.round(bet * bin.mult);
       onUpdateChips(payout);
 
@@ -333,12 +333,22 @@ export default function PlinkoGame({
         `🎉 ¡EXONERADO POR SUERTE EN PLINKO! La ficha cayó en la casilla dorada ${bin.label}. ¡${activeStudent ? activeStudent.name : 'El estudiante'} se salva del reto y cobra +${payout} fichas!`
       );
     } else {
-      // Low bin, challenge
+      // Non-exonerating bin: pays partial chips but triggers educational challenge
+      const partialPayout = Math.round(bet * bin.mult);
+      if (partialPayout > 0) {
+        onUpdateChips(partialPayout);
+      }
       setRoundOutcome('unlucky_challenge');
       sounds.playWrong();
-      setWinMessage(
-        `⚠️ ¡Mala suerte! La ficha cayó en la casilla baja ${bin.label} (inferior a 1.5x). ¡Debes responder el reto de inglés para salvarte!`
-      );
+      if (bin.mult >= 1.5) {
+        setWinMessage(
+          `⚡ ¡Buen tiro! La ficha cayó en ${bin.label} y cobras +${partialPayout} fichas. Para exonerarte directo se requiere 3x o 10x. ¡Supera este reto de inglés!`
+        );
+      } else {
+        setWinMessage(
+          `⚠️ La ficha cayó en la casilla ${bin.label} (recuperas ${partialPayout} fichas). ¡Debes responder el reto de inglés para salvar tu turno!`
+        );
+      }
 
       // Auto-generate pedagogical turn question on loss based on active session topics
       if (onGenerateTurnQuestion) {

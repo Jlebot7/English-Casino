@@ -16,6 +16,7 @@ export default function Navbar({
   currentView,
   setCurrentView,
   chips,
+  activeStudent,
   isMuted,
   onToggleMute,
   onOpenSettings,
@@ -110,11 +111,17 @@ export default function Navbar({
 
         {/* Right Tools (Chips, Mute, Settings) */}
         <div className="flex items-center gap-2">
-          {/* Chip Counter */}
-          <div className="flex items-center gap-1.5 bg-black/60 border border-amber-500/40 px-3 py-1.5 rounded-xl shadow-inner">
+          {/* Student Individual Chip Counter */}
+          <div 
+            className="flex items-center gap-1.5 bg-black/60 border border-amber-500/40 px-3 py-1.5 rounded-xl shadow-inner"
+            title={activeStudent ? `Fichas individuales de ${activeStudent.name}: ${(activeStudent.chips ?? 1000).toLocaleString()}` : 'Fichas individuales'}
+          >
             <Coins className="w-4 h-4 text-amber-400" />
-            <span className="text-xs font-black text-amber-300 tracking-wide">
-              {chips.toLocaleString()}
+            {activeStudent && (
+              <span className="text-xs mr-0.5">{activeStudent.avatar || '👤'}</span>
+            )}
+            <span className="text-xs font-black text-amber-300 tracking-wide font-mono">
+              {(activeStudent?.chips ?? chips ?? 1000).toLocaleString()}
             </span>
           </div>
 

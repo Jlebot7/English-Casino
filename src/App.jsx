@@ -219,6 +219,14 @@ export default function App() {
       const freshDay = getInitialSession(activeClassroom.id, activeClassroom.name);
       freshDay.completedStudentIds = [];
       setActiveSession(freshDay);
+      // Ensure each student starts with 1,000 chips at the beginning of each daily session
+      setClassrooms(prev => prev.map(c => ({
+        ...c,
+        students: c.students.map(s => ({
+          ...s,
+          chips: 1000
+        }))
+      })));
     }
   }, [activeClassroom.id, activeClassroom.name, activeSession]);
 
@@ -382,14 +390,35 @@ export default function App() {
     setActiveSession(freshSession);
     setHasChosenTurnStudent(false);
 
+    // Ensure each student starts with 1,000 individual chips at the start of each session
+    setClassrooms(prev => prev.map(c => {
+      if (c.id === activeClassroomId) {
+        return {
+          ...c,
+          students: c.students.map(s => ({ ...s, chips: 1000 }))
+        };
+      }
+      return c;
+    }));
+
     sounds.playJackpot();
-    alert('✅ Sesión diaria cerrada con éxito. La nueva sesión está limpia con todos los alumnos listos para participar.');
+    alert('✅ Sesión diaria cerrada con éxito. La nueva sesión está limpia con todos los alumnos listos con 1,000 fichas cada uno.');
   };
 
   const handleResetSessionRound = () => {
     setActiveSession(prev => ({
       ...prev,
       completedStudentIds: []
+    }));
+    // Reset all students' chips to 1,000
+    setClassrooms(prev => prev.map(c => {
+      if (c.id === activeClassroomId) {
+        return {
+          ...c,
+          students: c.students.map(s => ({ ...s, chips: 1000 }))
+        };
+      }
+      return c;
     }));
     setHasChosenTurnStudent(false);
     sounds.playChips();
@@ -461,6 +490,26 @@ export default function App() {
   }, []);
 
   const handleUpdateChips = (delta) => {
+    // 1. Update individual chips of active student in classroom
+    if (activeStudent) {
+      setClassrooms(prev => prev.map(c => {
+        if (c.id === activeClassroomId) {
+          return {
+            ...c,
+            students: c.students.map(s => {
+              if (s.id === activeStudent.id) {
+                return {
+                  ...s,
+                  chips: Math.max(0, (s.chips ?? 1000) + delta)
+                };
+              }
+              return s;
+            })
+          };
+        }
+        return c;
+      }));
+    }
     setChips(prev => Math.max(0, prev + delta));
   };
 
@@ -534,7 +583,8 @@ export default function App() {
       <Navbar
         currentView={currentView}
         setCurrentView={setCurrentView}
-        chips={chips}
+        chips={activeStudent?.chips ?? chips ?? 1000}
+        activeStudent={activeStudent}
         isMuted={isMuted}
         onToggleMute={handleToggleMute}
         onOpenSettings={() => {
@@ -665,7 +715,7 @@ export default function App() {
               {activeGameMachine === 'slots' && (
                 <SlotsGame
                   activity={currentActivity}
-                  chips={chips}
+                  chips={activeStudent?.chips ?? 1000}
                   onUpdateChips={handleUpdateChips}
                   onFinishGame={handleFinishGame}
                   onBackToLobby={() => setCurrentView('lobby')}
@@ -679,7 +729,7 @@ export default function App() {
               {activeGameMachine === 'roulette' && (
                 <RouletteGame
                   activity={currentActivity}
-                  chips={chips}
+                  chips={activeStudent?.chips ?? 1000}
                   onUpdateChips={handleUpdateChips}
                   onFinishGame={handleFinishGame}
                   onBackToLobby={() => setCurrentView('lobby')}
@@ -693,7 +743,7 @@ export default function App() {
               {activeGameMachine === 'blackjack' && (
                 <BlackjackGame
                   activity={currentActivity}
-                  chips={chips}
+                  chips={activeStudent?.chips ?? 1000}
                   onUpdateChips={handleUpdateChips}
                   onFinishGame={handleFinishGame}
                   onBackToLobby={() => setCurrentView('lobby')}
@@ -707,7 +757,7 @@ export default function App() {
               {activeGameMachine === 'plinko' && (
                 <PlinkoGame
                   activity={currentActivity}
-                  chips={chips}
+                  chips={activeStudent?.chips ?? 1000}
                   onUpdateChips={handleUpdateChips}
                   onFinishGame={handleFinishGame}
                   onBackToLobby={() => setCurrentView('lobby')}
@@ -721,7 +771,7 @@ export default function App() {
               {activeGameMachine === 'crash' && (
                 <CrashRocketGame
                   activity={currentActivity}
-                  chips={chips}
+                  chips={activeStudent?.chips ?? 1000}
                   onUpdateChips={handleUpdateChips}
                   onFinishGame={handleFinishGame}
                   onBackToLobby={() => setCurrentView('lobby')}
@@ -735,7 +785,7 @@ export default function App() {
               {activeGameMachine === 'mines' && (
                 <MinesGame
                   activity={currentActivity}
-                  chips={chips}
+                  chips={activeStudent?.chips ?? 1000}
                   onUpdateChips={handleUpdateChips}
                   onFinishGame={handleFinishGame}
                   onBackToLobby={() => setCurrentView('lobby')}

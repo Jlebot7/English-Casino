@@ -421,10 +421,16 @@ export default function CrashRocketGame({
     setTurnQuestionOverride(null);
     cashedOutMultiplierRef.current = null;
 
-    // Determine crash threshold (1.20x to 8.50x)
+    // Determine crash threshold: can crash early (1.10x to 1.45x) ~25% of the time, or fly higher
     const rand = Math.random();
-    let crashMult = 1.18 + (1 / (1 - rand * 0.88) - 1) * 0.75;
-    crashMult = Math.min(10.0, Math.max(1.25, crashMult));
+    let crashMult;
+    if (rand < 0.25) {
+      // Early takeoff turbulence crash
+      crashMult = 1.10 + Math.random() * 0.35;
+    } else {
+      crashMult = 1.30 + (1 / (1 - (rand - 0.25) * 1.15) - 1) * 0.65;
+    }
+    crashMult = Math.min(10.0, Math.max(1.10, crashMult));
     crashPointRef.current = parseFloat(crashMult.toFixed(2));
 
     startTimeRef.current = performance.now();
@@ -502,11 +508,11 @@ export default function CrashRocketGame({
     requestAnimationFrame(flightTick);
   };
 
-  // Cash Out Safely
+  // Cash Out Safely (requires reaching at least 1.50x altitude)
   const handleCashOut = () => {
-    if (gameState !== 'flying' || cashedOutMultiplierRef.current !== null) return;
+    if (gameState !== 'flying' || cashedOutMultiplierRef.current !== null || multiplier < 1.50) return;
 
-    const wonMult = Math.max(1.02, multiplier);
+    const wonMult = Math.max(1.50, multiplier);
     cashedOutMultiplierRef.current = wonMult;
     setGameState('cashed_out');
 
@@ -869,10 +875,19 @@ export default function CrashRocketGame({
           {gameState === 'flying' && (
             <button
               onClick={handleCashOut}
-              className="w-full py-4 sm:py-5 bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-400 text-black font-black text-lg sm:text-xl rounded-3xl shadow-2xl shadow-emerald-950/90 animate-pulse transition transform hover:scale-[1.02] active:scale-95 cursor-pointer flex items-center justify-center gap-3 border-2 border-emerald-300"
+              disabled={multiplier < 1.50}
+              className={`w-full py-4 sm:py-5 font-black text-lg sm:text-xl rounded-3xl shadow-2xl transition transform flex items-center justify-center gap-3 border-2 ${
+                multiplier >= 1.50
+                  ? 'bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-400 text-black border-emerald-300 animate-pulse hover:scale-[1.02] active:scale-95 cursor-pointer shadow-emerald-950/90'
+                  : 'bg-gray-900 border-gray-700 text-gray-400 opacity-60 cursor-not-allowed'
+              }`}
             >
-              <Coins className="w-7 h-7 text-black" />
-              <span>COBRAR {Math.round(bet * multiplier)} FICHAS ({multiplier.toFixed(2)}x)</span>
+              <Coins className="w-7 h-7" />
+              <span>
+                {multiplier >= 1.50
+                  ? `COBRAR ${Math.round(bet * multiplier)} FICHAS (${multiplier.toFixed(2)}x)`
+                  : `GANANDO ALTURA SEGURA... (${multiplier.toFixed(2)}x / 1.50x MÍN)`}
+              </span>
             </button>
           )}
 

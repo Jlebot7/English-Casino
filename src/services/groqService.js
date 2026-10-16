@@ -146,11 +146,11 @@ export async function generateEnglishQuiz({
       break;
     case 'random':
     default:
-      typeGuidance = `Include a balanced, diverse mix across the set representing the three main pedagogical pillars:
-- "multiple_choice" (4 options A, B, C, D with 1 single correct answer)
-- "concept" (open concept / rule explanation with modelAnswer and empty options)
-- "example" (sentence production prompt where the student creates an example with modelAnswer)
-Mark each item's "type" field accordingly.`;
+      typeGuidance = `You MUST distribute the questions evenly among the three pillars:
+- "concept" (1/3 of the questions): open concept / grammar rule explanation prompt with modelAnswer and empty "options": [].
+- "example" (1/3 of the questions): sentence production prompt where the student creates their own example with modelAnswer and empty "options": [].
+- "multiple_choice" (1/3 of the questions): 4 distinct options with 1 correct answer.
+Mark each item's "type" field accordingly ("concept", "example", or "multiple_choice").`;
       break;
   }
 
@@ -166,8 +166,8 @@ ${customInstructions ? `Teacher Custom Notes: ${customInstructions}` : ''}
 
 Rules:
 1. Provide realistic, natural, level-appropriate English.
-2. For multiple_choice and fill_blank with options: provide 4 distinct options, with one strictly correct.
-3. For sentence creation (affirmative, negative, question): provide clear cues/prompts, an exact "modelAnswer" for the teacher to verify, and clear "promptInstructions" in Spanish explaining to the student what to say aloud (e.g. "Di en voz alta una frase negativa usando: [she / drink / coffee]").
+2. For multiple_choice: provide 4 distinct options, with one strictly correct.
+3. For concept and example: leave "options": [] empty, provide a clear "modelAnswer" for the teacher to verify, and clear "promptInstructions" in Spanish explaining to the student what to say aloud or write.
 4. Include an insightful, friendly educational "explanation" for why the answer is right or the grammar rule.
 5. Categorize each challenge into one of: "Grammar", "Vocabulary", "Pronunciation", "Speaking", or "Expressions".
 6. Assign a casino coin payout value "points" between 150 and 400.
@@ -181,7 +181,7 @@ You MUST respond strictly with a valid JSON object matching this schema:
   "questions": [
     {
       "id": "q1",
-      "type": "multiple_choice | fill_blank | sentence_affirmative | sentence_negative | sentence_question",
+      "type": "concept | example | multiple_choice | fill_blank",
       "question": "The question or prompt in English",
       "promptInstructions": "Instrucción clara en español para el estudiante/docente",
       "options": ["Option A", "Option B", "Option C", "Option D"],
@@ -273,13 +273,23 @@ You MUST respond strictly with a valid JSON object matching this schema:
       }
 
       parsed.questions = parsed.questions.map((q, idx) => {
-        const qType = q.type || (challengeType === 'random' ? (q.type || 'multiple_choice') : challengeType);
-        const opts = Array.isArray(q.options) && q.options.length >= 2 ? q.options : [];
+        let qType = q.type;
+        if (!qType || qType === 'random') {
+          // Cycle evenly across concept, example, multiple_choice if unspecified
+          const typesCycle = ['concept', 'example', 'multiple_choice'];
+          qType = typesCycle[idx % typesCycle.length];
+        }
+        // Force options to be empty unless multiple_choice or fill_blank
+        const opts = (qType === 'multiple_choice' || qType === 'fill_blank') && Array.isArray(q.options) && q.options.length >= 2
+          ? q.options
+          : [];
         const ans = q.correctAnswer || q.modelAnswer || (opts.length > 0 ? opts[0] : 'Correct answer');
         const modelAns = q.modelAnswer || ans;
 
         let defaultInstruction = 'Responde la pregunta en el juego.';
-        if (qType === 'sentence_affirmative') defaultInstruction = '🗣️ Di una oración afirmativa en voz alta usando las palabras dadas.';
+        if (qType === 'concept') defaultInstruction = '💡 Explica la regla o concepto en voz alta al docente.';
+        else if (qType === 'example') defaultInstruction = '✍️ Di o escribe una oración de ejemplo aplicando la estructura.';
+        else if (qType === 'sentence_affirmative') defaultInstruction = '🗣️ Di una oración afirmativa en voz alta usando las palabras dadas.';
         else if (qType === 'sentence_negative') defaultInstruction = '🗣️ Di una oración negativa en voz alta usando las palabras dadas.';
         else if (qType === 'sentence_question') defaultInstruction = '🗣️ Formula una pregunta en voz alta usando las palabras dadas.';
         else if (qType === 'fill_blank') defaultInstruction = '✏️ Completa el espacio en blanco con la palabra adecuada.';
@@ -349,25 +359,40 @@ export async function generateSingleTurnQuestion({
 
   let chosenType = challengeType;
   if (challengeType === 'random') {
-    const types = ['concept', 'multiple_choice', 'example'];
-    chosenType = types[Math.floor(Math.random() * types.length)];
+    // Balanced pedagogical distribution: 40% Concept (Abierta), 40% Example (Producción), 20% Multiple Choice
+    const roll = Math.random();
+    if (roll < 0.40) {
+      chosenType = 'concept';
+    } else if (roll < 0.80) {
+      chosenType = 'example';
+    } else {
+      chosenType = 'multiple_choice';
+    }
   }
 
   let formatInstruction = '';
+  let exampleOptionsJson = '[]';
   if (chosenType === 'multiple_choice') {
     formatInstruction = 'Format: Multiple choice with 4 distinct options ("options": ["Option A", "Option B", "Option C", "Option D"]) and 1 exact correctAnswer. Only ONE option is correct. "category": "Opción Múltiple".';
+    exampleOptionsJson = '["Option A", "Option B", "Option C", "Option D"]';
   } else if (chosenType === 'concept') {
-    formatInstruction = 'Format: Concept / Open question (Pregunta abierta). Ask the student to explain a grammar rule, distinction, or language concept. "options": []. Provide "modelAnswer" with the expected explanation for teacher oral verification, and "promptInstructions": "Explica la regla o concepto en voz alta al docente." "category": "Concepto (Abierta)".';
+    formatInstruction = 'Format: Concept / Open question (Pregunta abierta). Ask the student to explain a grammar rule, distinction, or language concept. Do NOT provide multiple choice options; leave "options": []. Provide "modelAnswer" with the expected explanation for teacher oral verification, and "promptInstructions": "Explica la regla o concepto en voz alta al docente." "category": "Concepto (Abierta)".';
+    exampleOptionsJson = '[]';
   } else if (chosenType === 'example') {
-    formatInstruction = 'Format: Example production (Dar un ejemplo). Ask the student to produce a complete example sentence applying the rule. "options": []. Provide "modelAnswer" with a clear model sentence, and "promptInstructions": "Di o escribe una oración de ejemplo aplicando la estructura." "category": "Dar un Ejemplo".';
+    formatInstruction = 'Format: Example production (Dar un ejemplo). Ask the student to produce a complete example sentence applying the target grammar rule. Do NOT provide multiple choice options; leave "options": []. Provide "modelAnswer" with a clear model sentence, and "promptInstructions": "Di o escribe una oración de ejemplo aplicando la estructura." "category": "Dar un Ejemplo".';
+    exampleOptionsJson = '[]';
   } else if (chosenType === 'fill_blank') {
     formatInstruction = 'Format: Sentence with a blank "____" to complete. Provide 4 options or leave options empty if oral. Provide correctAnswer.';
+    exampleOptionsJson = '["Opt1", "Opt2", "Opt3", "Opt4"]';
   } else if (chosenType === 'sentence_affirmative') {
     formatInstruction = 'Format: Provide cues [subject / verb / complement] for the student to say an AFFIRMATIVE sentence aloud. "options": []. Provide "modelAnswer".';
+    exampleOptionsJson = '[]';
   } else if (chosenType === 'sentence_negative') {
     formatInstruction = 'Format: Provide cues for the student to say a NEGATIVE sentence aloud. "options": []. Provide "modelAnswer".';
+    exampleOptionsJson = '[]';
   } else if (chosenType === 'sentence_question') {
     formatInstruction = 'Format: Provide cues for the student to ask a QUESTION aloud. "options": []. Provide "modelAnswer".';
+    exampleOptionsJson = '[]';
   }
 
   const prompt = `Generate ONE engaging, unique English educational challenge for student "${studentName}" playing a Las Vegas casino classroom game.
@@ -383,7 +408,7 @@ Output strictly a single JSON object:
   "type": "${chosenType}",
   "question": "The question prompt or cues in English",
   "promptInstructions": "Instrucción corta en español para el estudiante/docente",
-  "options": ["Opt1", "Opt2", "Opt3", "Opt4"],
+  "options": ${exampleOptionsJson},
   "correctAnswer": "Exact correct answer or model sentence",
   "modelAnswer": "Model sentence for teacher oral verification",
   "explanation": "Clear educational tip or grammar rule in Spanish or English",
@@ -429,14 +454,17 @@ Output strictly a single JSON object:
 
       if (!parsed || !parsed.question) continue;
 
-      const opts = Array.isArray(parsed.options) && parsed.options.length >= 2 ? parsed.options : [];
+      // Only preserve options if the challenge type was genuinely multiple_choice!
+      const opts = (chosenType === 'multiple_choice' && Array.isArray(parsed.options) && parsed.options.length >= 2)
+        ? parsed.options
+        : [];
       const ans = parsed.correctAnswer || parsed.modelAnswer || (opts.length > 0 ? opts[0] : 'Yes');
 
       return {
         id: parsed.id || `turn_q_${Date.now()}`,
-        type: parsed.type || chosenType,
+        type: chosenType,
         question: parsed.question,
-        promptInstructions: parsed.promptInstructions || 'Responde el reto en voz alta o selecciona la opción.',
+        promptInstructions: parsed.promptInstructions || (chosenType === 'concept' ? '💡 Explica la regla o concepto en voz alta al docente.' : chosenType === 'example' ? '✍️ Di o escribe una oración de ejemplo aplicando la estructura.' : 'Responde el reto en voz alta o selecciona la opción.'),
         options: opts,
         correctAnswer: ans,
         modelAnswer: parsed.modelAnswer || ans,
